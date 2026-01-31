@@ -794,7 +794,7 @@
 
     <script>
         // DŮLEŽITÉ: Nahraď tuto URL svou URL z nasazení Google Apps Script
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyAmMhiGeb6uysNn_o-bzVpBI-Rwdt-Y84QeMqVKGJ7din1a1Br07A2dxZWxdSQlIm0/exec';
+        const API_URL = 'https://meteosazava.wz.cz/api.php';
         const AUTO_REFRESH_INTERVAL = 15 * 60 * 1000;
 
         let rawData = [];
@@ -827,112 +827,91 @@
         }
 
         async function loadData() {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('loading').textContent = '⏳ Načítám data z Google Sheets...';
-            document.getElementById('error').style.display = 'none';
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('loading').textContent = '⏳ Načítám data z MySQL...';
+    document.getElementById('error').style.display = 'none';
+    document.getElementById('success').style.display = 'none';
+
+    try {
+        const response = await fetch(API_URL, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const jsonData = await response.json();
+        
+        if (!jsonData.success) {
+            throw new Error(jsonData.error || 'Chyba při načítání dat');
+        }
+        
+        parseMySQLData(jsonData.data);
+        
+        document.getElementById('lastUpdate').textContent = 
+            `Poslední aktualizace: ${new Date().toLocaleString('cs-CZ')} | Načteno ${rawData.length} záznamů (MySQL)`;
+        
+        document.getElementById('success').textContent = 
+            `✅ Úspěšně načteno ${rawData.length} měření!`;
+        document.getElementById('success').style.display = 'block';
+        setTimeout(() => {
             document.getElementById('success').style.display = 'none';
+        }, 5000);
+    } catch (error) {
+        showError(error.message);
+    }
+}
 
-            try {
-                const response = await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'GET',
-                    redirect: 'follow'
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const csvText = await response.text();
-                parseGoogleSheetsData(csvText);
-                
-                document.getElementById('lastUpdate').textContent = 
-                    `Poslední aktualizace: ${new Date().toLocaleString('cs-CZ')} | Načteno ${rawData.length} záznamů (Google Sheets)`;
-                
-                document.getElementById('success').textContent = 
-                    `✅ Úspěšně načteno ${rawData.length} měření!`;
-                document.getElementById('success').style.display = 'block';
-                setTimeout(() => {
-                    document.getElementById('success').style.display = 'none';
-                }, 5000);
-            } catch (error) {
-                showError(error.message);
-            }
+        function parseMySQLData(data) {
+    try {
+        if (!Array.isArray(data) || data.length === 0) {
+            throw new Error('Žádná data v databázi');
         }
 
-        function parseGoogleSheetsData(csvText) {
-            try {
-                const lines = csvText.trim().split('\n');
-                
-                if (lines.length === 0) {
-                    throw new Error('Žádná data v tabulce');
-                }
-
-                rawData = [];
-                
-                for (let i = 1; i < lines.length; i++) {
-                    const values = lines[i].split(',');
-                    
-                    if (values.length < 5) continue;
-                    
-                    let datetime;
-                    const dateStr = values[0];
-                    
-                    if (dateStr.includes('GMT')) {
-                        datetime = new Date(dateStr);
-                    } else if (dateStr.includes('.')) {
-                        const [datePart, timePart] = dateStr.split(' ');
-                        const [day, month, year] = datePart.split('.');
-                        datetime = new Date(`${year}-${month}-${day}T${timePart}`);
-                    } else {
-                        datetime = new Date(dateStr);
-                    }
-                    
-                    if (isNaN(datetime.getTime())) continue;
-                    
-                    const parseNumber = (str) => {
-                        if (!str || str.trim() === '') return null;
-                        return parseFloat(str.trim().replace(',', '.'));
-                    };
-                    
-                    const teplota = parseNumber(values[1]);
-                    const vlhkost = parseNumber(values[2]);
-                    const tlak = parseNumber(values[3]);
-                    const baterie = parseNumber(values[4]);
-                    const srazky = parseNumber(values[5]);
-                    const baterieSrazkomeru = parseNumber(values[6]);
-                    
-                    if (teplota === null || vlhkost === null || tlak === null || baterie === null) continue;
-                    
-                    rawData.push({
-                        datetime,
-                        teplota,
-                        vlhkost,
-                        tlak,
-                        baterie,
-                        srazky: srazky !== null ? srazky : 0,
-                        baterieSrazkomeru: baterieSrazkomeru !== null ? baterieSrazkomeru : 0
-                    });
-                }
-
-                if (rawData.length === 0) {
-                    throw new Error('Žádná platná data po zpracování');
-                }
-
-                rawData.sort((a, b) => a.datetime - b.datetime);
-
-                document.getElementById('loading').style.display = 'none';
-                showDashboard();
-                
-                if (Object.keys(charts).length === 0) {
-                    initializeCharts();
-                    initializeSliders();
-                }
-                
-                updateCharts();
-            } catch (error) {
-                showError('Chyba zpracování dat: ' + error.message);
+        rawData = data.map(row => {
+            // Převod datum_a_cas na Date objekt
+            const datetime = new Date(row.datetime);
+            
+            if (isNaN(datetime.getTime())) {
+                console.warn('Neplatné datum:', row.datetime);
+                return null;
             }
+            
+            return {
+                datetime,
+                teplota: parseFloat(row.teplota) || 0,
+                vlhkost: parseFloat(row.vlhkost) || 0,
+                tlak: parseFloat(row.tlak) || 0,
+                baterie: parseFloat(row.baterie) || 0,
+                srazky: parseFloat(row.srazky) || 0,
+                baterieSrazkomeru: parseFloat(row.baterieSrazkomeru) || 0
+            };
+        }).filter(item => item !== null);
+
+        if (rawData.length === 0) {
+            throw new Error('Žádná platná data po zpracování');
         }
+
+        rawData.sort((a, b) => a.datetime - b.datetime);
+
+        document.getElementById('loading').style.display = 'none';
+        showDashboard();
+        
+        if (Object.keys(charts).length === 0) {
+            initializeCharts();
+            initializeSliders();
+        }
+        
+        updateCharts();
+    } catch (error) {
+        showError('Chyba zpracování dat: ' + error.message);
+    }
+}
+
 
         function showError(msg) {
             document.getElementById('loading').style.display = 'none';
@@ -2124,5 +2103,6 @@
     </script>
 </body>
 </html>
+
 
 
