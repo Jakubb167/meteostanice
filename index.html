@@ -1264,6 +1264,17 @@
             autoRefreshTimer = setInterval(loadData, AUTO_REFRESH_INTERVAL);
         });
 
+        window.addEventListener('resize', function() {
+            const wrapper = document.querySelector('.heatmap-wrapper');
+            if (!wrapper) return;
+            
+            if (window.innerWidth <= 768) {
+                wrapper.classList.add('mobile-rotate');
+            } else {
+                wrapper.classList.remove('mobile-rotate');
+            }
+        });
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
@@ -3024,6 +3035,14 @@
             contentWrapper.appendChild(dataDiv);
             gridContainer.appendChild(contentWrapper);
             heatmapDiv.appendChild(gridContainer);
+            
+            // Přidání rotace pro mobily
+            if (window.innerWidth <= 768) {
+                const wrapper = document.querySelector('.heatmap-wrapper');
+                if (wrapper) {
+                    wrapper.classList.add('mobile-rotate');
+                }
+            }
         }
 
         function isLeapYear(year) {
