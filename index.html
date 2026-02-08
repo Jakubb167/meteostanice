@@ -1263,6 +1263,18 @@
             loadData();
             autoRefreshTimer = setInterval(loadData, AUTO_REFRESH_INTERVAL);
         });
+        
+        // Listener pro změnu orientace/velikosti
+        window.addEventListener('resize', function() {
+            const grids = document.querySelectorAll('.heatmap-grid');
+            grids.forEach(grid => {
+                if (window.innerWidth <= 768) {
+                    grid.classList.add('mobile-rotated');
+                } else {
+                    grid.classList.remove('mobile-rotated');
+                }
+            });
+        });
 
         window.addEventListener('resize', function() {
             const wrapper = document.querySelector('.heatmap-wrapper');
