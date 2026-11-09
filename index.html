@@ -1,3033 +1,577 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meteostanice - Live Dashboard</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1/dist/chartjs-plugin-zoom.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.1.0/dist/chartjs-plugin-annotation.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(160deg, #dbeafe 0%, #bfdbfe 30%, #e0e7ff 65%, #c7d2fe 100%);
-            background-attachment: fixed;
-            min-height: 100vh;
-            padding: 20px;
-            transition: background 0.6s ease;
-        }
-
-        body.sklenik-mode {
-            background: linear-gradient(160deg, #d1fae5 0%, #a7f3d0 30%, #6ee7b7 65%, #34d399 100%);
-            background-attachment: fixed;
-        }
-
-        .container {
-            max-width: 1800px;
-            margin: 0 auto;
-        }
-
-        header {
-            text-align: center;
-            color: #667eea;
-            margin-bottom: 30px;
-            animation: fadeIn 0.8s;
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            position: relative;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        h1 {
-            font-size: 3em;
-            margin-bottom: 10px;
-            transition: all 0.4s ease;
-        }
-
-        .subtitle {
-            font-size: 1.2em;
-            opacity: 0.95;
-            transition: all 0.4s ease;
-        }
-
-        .live-indicator {
-            display: inline-flex;
-            align-items: center;
-            background: rgba(102, 126, 234, 0.1);
-            padding: 10px 20px;
-            border-radius: 25px;
-            margin-top: 15px;
-        }
-
-        .live-dot {
-            width: 12px;
-            height: 12px;
-            background: #4ade80;
-            border-radius: 50%;
-            margin-right: 10px;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(0.8); }
-        }
-
-        /* ===== SOURCE BUTTONS ===== */
-        .source-buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 18px;
-        }
-
-        .source-btn {
-            padding: 10px 28px;
-            border: 2px solid #667eea;
-            border-radius: 25px;
-            background: transparent;
-            color: #667eea;
-            font-size: 1em;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            letter-spacing: 0.3px;
-        }
-
-        .source-btn:hover {
-            background: rgba(102,126,234,0.1);
-            transform: translateY(-1px);
-        }
-
-        .source-btn.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-color: transparent;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        body.sklenik-mode .source-btn {
-            border-color: #22c55e;
-            color: #22c55e;
-        }
-
-        body.sklenik-mode .source-btn:hover {
-            background: rgba(34,197,94,0.1);
-        }
-
-        body.sklenik-mode .source-btn.active {
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-            color: white;
-            border-color: transparent;
-            box-shadow: 0 4px 15px rgba(34,197,94,0.4);
-        }
-
-
-        /* ===== KOMBINOVANÝ GRAF (tmep styl) ===== */
-        .combo-chart-container {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-
-        .combo-chart-container h2 {
-            margin-bottom: 15px;
-            color: #667eea;
-            font-size: 1.4em;
-            transition: color 0.3s;
-        }
-
-        body.sklenik-mode .combo-chart-container h2 {
-            color: #22c55e;
-        }
-
-        .combo-legend {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            margin-bottom: 15px;
-        }
-
-        .combo-legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 16px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.9em;
-            font-weight: 600;
-            border: 2px solid transparent;
-            transition: all 0.2s;
-            user-select: none;
-        }
-
-        .combo-legend-item:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-
-        .combo-legend-item.disabled {
-            opacity: 0.35;
-        }
-
-        .combo-legend-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .combo-chart-wrapper {
-            position: relative;
-            height: 420px;
-            width: 100%;
-        }
-
-        .midnight-line {
-            position: absolute;
-            top: 0;
-            width: 1px;
-            background: rgba(0,0,0,0.15);
-            pointer-events: none;
-            z-index: 5;
-        }
-
-        .midnight-label {
-            position: absolute;
-            top: 4px;
-            font-size: 0.7em;
-            color: #aaa;
-            transform: translateX(-50%);
-            pointer-events: none;
-            z-index: 5;
-        }
-
-        /* ===== SROVNÁVACÍ GRAF ===== */
-        .compare-chart-container {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            border-top: 5px solid transparent;
-            border-image: linear-gradient(90deg, #667eea 0%, #22c55e 100%) 1;
-        }
-
-        .compare-chart-container h2 {
-            margin-bottom: 8px;
-            color: #444;
-            font-size: 1.4em;
-        }
-
-        .compare-chart-container p.compare-subtitle {
-            color: #888;
-            font-size: 0.9em;
-            margin-bottom: 15px;
-        }
-
-        .compare-legend {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            margin-bottom: 15px;
-        }
-
-        .compare-legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 0.88em;
-            font-weight: 600;
-            border: 2px solid transparent;
-            user-select: none;
-        }
-
-        .compare-legend-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .compare-legend-dot.dashed {
-            background: repeating-linear-gradient(
-                90deg,
-                currentColor 0px,
-                currentColor 4px,
-                transparent 4px,
-                transparent 8px
-            );
-            border-radius: 0;
-            height: 3px;
-            width: 20px;
-        }
-
-        .compare-status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.78em;
-            font-weight: 700;
-            margin-left: 8px;
-        }
-
-        .compare-status-badge.loading-badge {
-            background: rgba(102,126,234,0.1);
-            color: #667eea;
-        }
-
-        .compare-status-badge.ok-badge {
-            background: rgba(34,197,94,0.1);
-            color: #16a34a;
-        }
-
-        .compare-status-badge.error-badge {
-            background: rgba(220,53,69,0.1);
-            color: #dc3545;
-        }
-
-        .compare-filter-row {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-            align-items: center;
-            margin-bottom: 16px;
-            padding: 12px 16px;
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-
-        .compare-filter-row label {
-            font-weight: 600;
-            color: #555;
-            font-size: 0.9em;
-        }
-
-        .compare-filter-row select {
-            padding: 7px 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 0.9em;
-            background: white;
-        }
-
-        .compare-charts-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        @media (max-width: 900px) {
-            .compare-charts-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .compare-chart-panel {
-            position: relative;
-        }
-
-        .compare-chart-panel h3 {
-            font-size: 1em;
-            font-weight: 700;
-            color: #555;
-            margin-bottom: 8px;
-        }
-
-        .compare-chart-wrapper {
-            position: relative;
-            height: 300px;
-        }
-
-        /* Skleník mode - zelená barva */
-        body.sklenik-mode header {
-            color: #22c55e;
-        }
-
-        body.sklenik-mode .source-select {
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
-        }
-
-        body.sklenik-mode .source-select:hover {
-            box-shadow: 0 6px 20px rgba(34, 197, 94, 0.6);
-        }
-
-        body.sklenik-mode .stat-card::before {
-            background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
-        }
-
-        body.sklenik-mode .stat-value {
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        body.sklenik-mode .tab.active {
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
-        }
-
-        body.sklenik-mode .chart-container h2 {
-            color: #22c55e;
-        }
-
-        body.sklenik-mode .table-container h2 {
-            color: #22c55e;
-        }
-
-        body.sklenik-mode .data-table thead {
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-        }
-
-        body.sklenik-mode .btn {
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-        }
-
-        body.sklenik-mode .btn:hover {
-            box-shadow: 0 5px 15px rgba(34, 197, 94, 0.4);
-        }
-
-        body.sklenik-mode .chart-controls button {
-            background: #22c55e;
-        }
-
-        body.sklenik-mode .chart-controls button:hover {
-            background: #16a34a;
-        }
-
-        body.sklenik-mode .filters label {
-            color: #22c55e;
-        }
-
-        body.sklenik-mode .live-indicator {
-            background: rgba(34, 197, 94, 0.1);
-        }
-
-        body.sklenik-mode .live-dot {
-            background: #22c55e;
-        }
-
-        body.sklenik-mode .chart-slider-window {
-            background: rgba(34, 197, 94, 0.3);
-            border-color: #22c55e;
-        }
-
-        body.sklenik-mode .chart-slider-handle {
-            background: #22c55e;
-        }
-
-        body.sklenik-mode .tabs {
-            border-left: 4px solid #22c55e;
-        }
-
-        /* Přechod animace při změně zdroje */
-        .source-transition {
-            animation: sourceSwitch 0.5s ease;
-        }
-
-        @keyframes sourceSwitch {
-            0% { opacity: 1; }
-            30% { opacity: 0.3; }
-            100% { opacity: 1; }
-        }
-
-        /* Badge zdroje dat */
-        .source-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.8em;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-left: 10px;
-            vertical-align: middle;
-        }
-
-        .source-badge.meteo {
-            background: rgba(102, 126, 234, 0.15);
-            color: #667eea;
-        }
-
-        .source-badge.sklenik {
-            background: rgba(34, 197, 94, 0.15);
-            color: #16a34a;
-        }
-
-        /* ===== ZBYTEK CSS (beze změny) ===== */
-        .last-update {
-            text-align: center;
-            color: #666;
-            font-size: 0.95em;
-            margin-bottom: 20px;
-        }
-
-        .tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            background: white;
-            padding: 10px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            flex-wrap: wrap;
-            transition: border-color 0.3s;
-        }
-
-        .tab {
-            padding: 15px 30px;
-            background: #f5f5f5;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 1em;
-            font-weight: 600;
-            color: #666;
-            transition: all 0.3s;
-        }
-
-        .tab:hover {
-            background: #e0e0e0;
-        }
-
-        .tab.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: white;
-            padding: 30px 25px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            transition: all 0.3s;
-            position: relative;
-            overflow: hidden;
-            min-height: 360px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 5px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: background 0.4s;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
-        }
-
-        .stat-icon {
-            font-size: 3em;
-            margin-bottom: 10px;
-        }
-
-        .stat-label {
-            font-size: 0.9em;
-            color: #666;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
-        }
-
-        .stat-value {
-            font-size: 3.5em;
-            font-weight: bold;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 5px;
-            line-height: 1.1;
-            transition: background 0.4s;
-        }
-
-        .stat-timestamp {
-            font-size: 0.75em;
-            color: #999;
-            margin-bottom: 10px;
-            font-style: italic;
-        }
-
-        .stat-meta {
-            font-size: 0.85em;
-            color: #999;
-            margin-top: 10px;
-        }
-
-        .stat-trend {
-            font-size: 0.95em;
-            font-weight: 600;
-            margin: 8px 0;
-        }
-
-        .stat-trend.up {
-            color: #28a745;
-        }
-
-        .stat-trend.down {
-            color: #dc3545;
-        }
-
-        .filters {
-            background: white;
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .filter-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .filters label {
-            font-weight: 600;
-            color: #667eea;
-            transition: color 0.3s;
-        }
-
-        .filters select, .filters input {
-            padding: 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .chart-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(550px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .chart-container {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            transition: transform 0.3s;
-        }
-
-        .chart-container:hover {
-            transform: translateY(-5px);
-        }
-
-        .chart-container h2 {
-            margin-bottom: 20px;
-            color: #667eea;
-            font-size: 1.4em;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            transition: color 0.3s;
-        }
-
-        .chart-wrapper {
-            position: relative;
-            height: 350px;
-        }
-
-        .full-width {
-            grid-column: 1 / -1;
-        }
-
-        .table-container {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            overflow-x: auto;
-        }
-
-        .table-container h2 {
-            margin-bottom: 20px;
-            color: #667eea;
-            font-size: 1.4em;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            transition: color 0.3s;
-        }
-
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.95em;
-        }
-
-        .data-table thead {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            transition: background 0.3s;
-        }
-
-        .data-table th {
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.85em;
-            letter-spacing: 0.5px;
-        }
-
-        .data-table td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .data-table tbody tr:hover {
-            background: #f5f5f5;
-        }
-
-        .data-table tbody tr:last-child td {
-            border-bottom: none;
-        }
-
-        .heatmap-container {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-
-        .heatmap-wrapper {
-            position: relative;
-            width: 100%;
-            overflow-x: visible;
-            overflow-y: visible;
-        }
-
-        .heatmap-grid {
-            display: grid;
-            grid-template-columns: 60px 1fr;
-            gap: 0;
-            width: 100%;
-        }
-
-        .heatmap-y-labels {
-            display: flex;
-            flex-direction: column;
-            gap: 0;
-        }
-
-        .heatmap-y-label {
-            font-size: 0.7em;
-            color: #666;
-            text-align: right;
-            padding-right: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            height: 20px;
-            line-height: 20px;
-        }
-
-        .heatmap-content-wrapper {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .heatmap-x-labels {
-            display: flex;
-            height: 30px;
-            position: relative;
-            border-bottom: 1px solid #ddd;
-            margin-bottom: 0;
-        }
-
-        .heatmap-month-label {
-            position: absolute;
-            font-size: 0.75em;
-            color: #666;
-            font-weight: 600;
-            transform: translateX(-50%);
-            top: 8px;
-        }
-
-        .heatmap-data {
-            display: flex;
-            gap: 0;
-        }
-
-        .heatmap-day-column {
-            display: flex;
-            flex-direction: column;
-            gap: 0;
-            flex: 1;
-            min-width: 2px;
-        }
-
-        .heatmap-hour-cell {
-            height: 20px;
-            transition: all 0.2s;
-            cursor: pointer;
-            border: none;
-        }
-
-        .heatmap-hour-cell:hover {
-            transform: scale(1.5);
-            z-index: 1000;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-            border: 2px solid white;
-        }
-
-        .heatmap-legend {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 15px;
-            padding: 10px;
-            background: #f9f9f9;
-            border-radius: 8px;
-        }
-
-        .heatmap-legend-gradient {
-            flex: 1;
-            height: 25px;
-            border-radius: 5px;
-            background: linear-gradient(to right, 
-                #1a2a4a,
-                #3c5c8c,
-                #6b9bc4,
-                #a8cde3,
-                #f5dc78,
-                #faa04a,
-                #e8583a,
-                #c83028,
-                #8b0000
-            );
-        }
-
-        .chart-slider-container {
-            margin-top: 15px;
-            padding: 15px;
-            background: #f9f9f9;
-            border-radius: 8px;
-        }
-
-        .chart-slider {
-            position: relative;
-            height: 60px;
-            background: #e9ecef;
-            border-radius: 6px;
-            overflow: visible;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .chart-slider-preview {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            opacity: 0.3;
-            pointer-events: none;
-        }
-
-        .chart-slider-window {
-            position: absolute;
-            height: 100%;
-            background: rgba(102, 126, 234, 0.3);
-            border: 2px solid #667eea;
-            border-radius: 4px;
-            cursor: move;
-            min-width: 50px;
-            box-sizing: border-box;
-            transition: background 0.3s, border-color 0.3s;
-        }
-
-        .chart-slider-handle {
-            position: absolute;
-            top: 0;
-            width: 12px;
-            height: 100%;
-            background: #667eea;
-            cursor: ew-resize;
-            z-index: 10;
-            box-sizing: border-box;
-            transition: background 0.3s;
-        }
-
-        .chart-slider-handle.left {
-            left: 0;
-            border-radius: 4px 0 0 4px;
-        }
-
-        .chart-slider-handle.right {
-            right: 0;
-            border-radius: 0 4px 4px 0;
-        }
-
-        .slider-labels {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 5px;
-            font-size: 0.8em;
-            color: #666;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 50px;
-            color: #667eea;
-            font-size: 1.5em;
-        }
-
-        .loading::after {
-            content: '...';
-            animation: dots 1.5s infinite;
-        }
-
-        @keyframes dots {
-            0%, 20% { content: '.'; }
-            40% { content: '..'; }
-            60%, 100% { content: '...'; }
-        }
-
-        .error {
-            background: #dc3545;
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .success {
-            background: #28a745;
-            color: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            text-align: center;
-            animation: fadeIn 0.5s;
-        }
-
-        .chart-controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-
-        .chart-controls button {
-            padding: 8px 16px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: all 0.3s;
-        }
-
-        .chart-controls button:hover {
-            background: #764ba2;
-            transform: translateY(-2px);
-        }
-
-        @media (max-width: 768px) {
-            h1 { font-size: 2em; }
-            .chart-grid { grid-template-columns: 1fr; }
-            .stats-grid { grid-template-columns: 1fr; }
-            .stat-value { font-size: 2.8em; }
-            .stat-card { min-height: 320px; }
-            .source-selector-wrapper {
-                position: static;
-                justify-content: center;
-                margin-top: 15px;
-            }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meteostanice – Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1/dist/chartjs-plugin-zoom.min.js"></script>
+<style>
+:root{--bg:#eef2f6;--card:#fff;--text:#0f172a;--muted:#64748b;--line:#e2e8f0;--soft:#f6f8fb;--accent:#3b5bdb;--accent-soft:rgba(59,91,219,.1);--shadow:0 1px 2px rgba(15,23,42,.05),0 6px 20px rgba(15,23,42,.04);color-scheme:light dark}
+body.sklenik{--accent:#15803d;--accent-soft:rgba(21,128,61,.1)}
+@media(prefers-color-scheme:dark){:root{--bg:#0a101d;--card:#121a2c;--text:#e6eaf2;--muted:#8d9bb5;--line:#232f4a;--soft:#0e1626;--accent:#7b93ff;--accent-soft:rgba(123,147,255,.14);--shadow:0 1px 2px rgba(0,0,0,.4)}body.sklenik{--accent:#4ade80;--accent-soft:rgba(74,222,128,.13)}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.45;padding:16px;transition:background .4s}
+.wrap{max-width:1640px;margin:0 auto}
+header{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:22px 26px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;border-left:6px solid var(--accent)}
+h1{font-size:1.7rem;font-weight:700;letter-spacing:-.01em}
+.sub{color:var(--muted);margin-top:2px}
+.src{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px}
+.src button{border:0;background:none;color:var(--muted);font:600 .95rem inherit;font-family:inherit;padding:9px 18px;border-radius:9px;cursor:pointer}
+.src button.on{background:var(--accent);color:#fff}
+.src button:not(.on):hover{color:var(--text)}
+.live{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:.85rem;margin-top:8px}
+.live i{width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:p 2s infinite}
+@keyframes p{70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+#msg{margin:16px 0;padding:14px 18px;border-radius:12px;background:var(--card);box-shadow:var(--shadow);text-align:center;color:var(--muted)}
+#msg.bad{background:#dc2626;color:#fff}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:16px 0}
+.stat{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:16px 18px;border-top:4px solid var(--c)}
+.sh{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:.85rem;font-weight:600}
+.sv{font-size:2.4rem;font-weight:700;line-height:1.1;margin:6px 0 2px;font-variant-numeric:tabular-nums}
+.sv small{font-size:1rem;font-weight:500;color:var(--muted);margin-left:4px}
+.st{font-size:.85rem;font-weight:600}.st.up{color:#16a34a}.st.dn{color:#dc2626}
+.sm{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);display:grid;gap:3px;font-size:.82rem;color:var(--muted)}
+.sm b{color:var(--text);font-weight:600;margin-right:4px}.sm em{font-style:normal;margin-left:6px;opacity:.75}
+.tabs{position:sticky;top:0;z-index:20;display:flex;gap:6px;background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:6px;margin-bottom:16px;overflow-x:auto}
+.tab{flex:1;white-space:nowrap;border:0;background:none;color:var(--muted);font:600 .95rem inherit;font-family:inherit;padding:11px 18px;border-radius:10px;cursor:pointer}
+.tab:hover{background:var(--soft)}.tab.on{background:var(--accent);color:#fff}
+.pane{display:none}.pane.on{display:block}
+.filters{display:flex;flex-wrap:wrap;gap:14px;align-items:end;background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:14px 18px;margin-bottom:16px}
+.filters label,.cmp label{display:grid;gap:4px;font-size:.78rem;font-weight:600;color:var(--muted)}
+select,input{font:inherit;font-size:.92rem;color:var(--text);background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.btn,.ghost{font:600 .85rem inherit;font-family:inherit;border-radius:8px;cursor:pointer}
+.btn{background:var(--accent);color:#fff;border:0;padding:10px 16px}
+.ghost{background:none;border:1px solid var(--line);color:var(--muted);padding:6px 10px}.ghost:hover{color:var(--text);border-color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:12px 16px}
+.kpi span{display:block;font-size:.78rem;color:var(--muted);font-weight:600}
+.kpi b{font-size:1.45rem;font-variant-numeric:tabular-nums}.kpi em{display:block;font-style:normal;font-size:.78rem;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:16px;margin-bottom:16px}
+.card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:20px 22px;min-width:0}
+.wide{grid-column:1/-1}
+.ch{display:flex;justify-content:space-between;gap:12px;align-items:start;margin-bottom:12px;flex-wrap:wrap}
+.card h2{font-size:1.1rem;font-weight:700}.card p{color:var(--muted);font-size:.85rem;margin-top:2px}
+.cw{position:relative;height:320px}.wide .cw{height:400px}
+.cmp{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.badge{font-size:.8rem;font-weight:600;padding:5px 12px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
+.tbl{overflow:auto;max-height:520px;border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;font-size:.88rem;font-variant-numeric:tabular-nums}
+th,td{padding:8px 12px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{position:sticky;background:var(--soft);color:var(--muted);font-size:.78rem;font-weight:600;border-bottom:1px solid var(--line)}
+thead tr:first-child th{top:0;text-align:center}thead tr:nth-child(2) th{top:33px}
+thead tr:first-child th:first-child{text-align:left}
+tbody tr:nth-child(even){background:var(--soft)}tbody tr:hover{background:var(--accent-soft)}
+td.hot{color:#dc2626;font-weight:600}td.cold{color:#2563eb;font-weight:600}
+.hgrid{display:grid;grid-template-columns:50px 1fr;width:100%}
+.hy{display:flex;flex-direction:column;padding-top:30px}
+.hyl{font-size:.7rem;color:var(--muted);text-align:right;padding-right:8px;height:20px;line-height:20px}
+.hxl{position:relative;height:30px;border-bottom:1px solid var(--line)}
+.hml{position:absolute;top:8px;font-size:.75rem;font-weight:600;color:var(--muted);transform:translateX(-50%)}
+.hdata{display:flex}
+.hcol{display:flex;flex-direction:column;flex:1;min-width:2px}
+.hc{height:20px;cursor:pointer;transition:transform .15s}
+.hc:hover{transform:scale(1.5);z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.4);border:2px solid #fff;position:relative}
+.hl{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:.82rem;color:var(--muted)}
+.hl i{flex:1;height:12px;border-radius:6px}
+body.sklenik .meteo-only{display:none!important}body:not(.sklenik) .sk-only{display:none!important}
+.ml{margin-left:auto;display:flex;gap:8px;align-items:center}
+.alert{padding:11px 16px;border-radius:12px;font-weight:600;margin-top:12px;background:#fee2e2;color:#991b1b}.alert.warn{background:#fef3c7;color:#92400e}
+.thr{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:.8rem;color:var(--muted);margin-top:12px}.thr label{display:flex;gap:6px;align-items:center}.thr input{width:70px;padding:5px 8px}
+@media(max-width:700px){body{padding:10px}h1{font-size:1.35rem}.sv{font-size:2rem}.cw,.wide .cw{height:290px}.card{padding:16px}}
+</style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1 id="headerTitle">⛅ Meteostanice - Sázava</h1>
-            <p class="subtitle" id="headerSubtitle">Sázava - Černé Budy</p>
-            <div class="live-indicator">
-                <div class="live-dot"></div>
-                <span>LIVE DATA</span>
-            </div>
-            <div class="source-buttons">
-                <button class="source-btn active" id="btnMeteo" onclick="switchDataSource('meteostanice')">⛅ Meteostanice</button>
-                <button class="source-btn" id="btnSklenik" onclick="switchDataSource('sklenik')">🌿 Skleník</button>
-            </div>
-        </header>
-
-        <div id="lastUpdate" class="last-update"></div>
-        <div id="loading" class="loading">⏳ Načítám data...</div>
-        <div id="error" class="error" style="display: none;"></div>
-        <div id="success" class="success" style="display: none;"></div>
-
-        <div class="stats-grid" id="statsGrid" style="display: none;"></div>
-
-        <div class="tabs" id="tabs" style="display: none;">
-            <button class="tab active" onclick="switchTab('current')">📊 Aktuálně</button>
-            <button class="tab" onclick="switchTab('daily')">📅 Denní</button>
-            <button class="tab" onclick="switchTab('monthly')">📆 Měsíční</button>
-            <button class="tab" onclick="switchTab('yearly')">📋 Roční</button>
-        </div>
-
-        <!-- ===== TAB: AKTUÁLNĚ ===== -->
-        <div id="currentTab" class="tab-content active">
-            <div class="filters" id="currentFilters" style="display: none;">
-                <div class="filter-group">
-                    <label>📅 Období:</label>
-                    <select id="currentTimeRange" onchange="updateCurrentData()">
-                        <option value="1">Poslední den</option>
-                        <option value="3">Poslední 3 dny</option>
-                        <option value="7" selected>Posledních 7 dní</option>
-                        <option value="14">Posledních 14 dní</option>
-                        <option value="30">Posledních 30 dní</option>
-                        <option value="all">Všechna data</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label>Od:</label>
-                    <input type="datetime-local" id="currentDateFrom" onchange="updateCurrentData()">
-                </div>
-                <div class="filter-group">
-                    <label>Do:</label>
-                    <input type="datetime-local" id="currentDateTo" onchange="updateCurrentData()">
-                </div>
-                <button class="btn" onclick="loadData()" style="margin-left: auto;">
-                    🔄 Obnovit data
-                </button>
-            </div>
-
-            <!-- KOMBINOVANÝ GRAF (tmep styl) -->
-            <div class="combo-chart-container" id="comboChartContainer" style="display:none;">
-                <h2 id="comboChartTitle">📈 Teplota / Vlhkost / Tlak</h2>
-                <div class="combo-legend" id="comboLegend">
-                    <div class="combo-legend-item" id="legendTemp" onclick="toggleComboSeries('temp')" style="border-color:#ff6384; background:rgba(255,99,132,0.08);">
-                        <div class="combo-legend-dot" style="background:#ff6384;"></div>
-                        <span>Teplota (°C)</span>
-                    </div>
-                    <div class="combo-legend-item" id="legendHumidity" onclick="toggleComboSeries('humidity')" style="border-color:#36a2eb; background:rgba(54,162,235,0.08);">
-                        <div class="combo-legend-dot" style="background:#36a2eb;"></div>
-                        <span>Vlhkost (%)</span>
-                    </div>
-                    <div class="combo-legend-item meteo-only" id="legendPressure" onclick="toggleComboSeries('pressure')" style="border-color:#ffa040; background:rgba(255,160,64,0.08);">
-                        <div class="combo-legend-dot" style="background:#ffa040;"></div>
-                        <span>Tlak (hPa)</span>
-                    </div>
-                </div>
-                <div class="combo-chart-wrapper" id="comboChartWrapper">
-                    <canvas id="comboChart"></canvas>
-                </div>
-                <div class="chart-slider-container">
-                    <div class="chart-slider" id="comboSlider">
-                        <canvas class="chart-slider-preview" id="comboSliderPreview"></canvas>
-                        <div class="chart-slider-window" id="comboSliderWindow">
-                            <div class="chart-slider-handle left"></div>
-                            <div class="chart-slider-handle right"></div>
-                        </div>
-                    </div>
-                    <div class="slider-labels">
-                        <span id="comboSliderStart">-</span>
-                        <span id="comboSliderEnd">-</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ===== SROVNÁVACÍ GRAF SKLENÍK vs. METEOSTANICE ===== -->
-            <div class="compare-chart-container" id="compareChartContainer" style="display:none;">
-                <h2>🔀 Srovnání: Skleník vs. Meteostanice</h2>
-                <p class="compare-subtitle">Porovnání teploty a vlhkosti naměřené v obou stanicích ve stejném časovém období</p>
-
-                <div class="compare-filter-row">
-                    <label>📅 Období:</label>
-                    <select id="compareTimeRange" onchange="updateCompareChart()">
-                        <option value="1">Poslední den</option>
-                        <option value="3">Poslední 3 dny</option>
-                        <option value="7" selected>Posledních 7 dní</option>
-                        <option value="14">Posledních 14 dní</option>
-                        <option value="30">Posledních 30 dní</option>
-                        <option value="all">Všechna data</option>
-                    </select>
-                    <span id="compareStatusBadge" class="compare-status-badge loading-badge">⏳ Načítám data skleníku...</span>
-                </div>
-
-                <div class="compare-legend">
-                    <div class="compare-legend-item" style="border: 2px solid #e53935; background:rgba(229,57,53,0.08);">
-                        <div class="compare-legend-dot" style="background:#e53935;"></div>
-                        <span>⛅ Meteostanice – teplota (°C)</span>
-                    </div>
-                    <div class="compare-legend-item" style="border: 2px solid #22c55e; background:rgba(34,197,94,0.08);">
-                        <div class="compare-legend-dot" style="background:#22c55e;"></div>
-                        <span>🌿 Skleník – teplota (°C)</span>
-                    </div>
-                    <div class="compare-legend-item" style="border: 2px solid #e53935; background:rgba(229,57,53,0.08); opacity:0.7;">
-                        <div class="compare-legend-dot" style="background:#e53935;"></div>
-                        <span>⛅ Meteostanice – vlhkost (%)</span>
-                    </div>
-                    <div class="compare-legend-item" style="border: 2px solid #22c55e; background:rgba(34,197,94,0.08); opacity:0.7;">
-                        <div class="compare-legend-dot" style="background:#22c55e;"></div>
-                        <span>🌿 Skleník – vlhkost (%)</span>
-                    </div>
-                </div>
-
-                <div class="compare-charts-grid">
-                    <div class="compare-chart-panel">
-                        <h3>🌡️ Teplota (°C)</h3>
-                        <div class="compare-chart-wrapper">
-                            <canvas id="compareTempChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="compare-chart-panel">
-                        <h3>💧 Vlhkost (%)</h3>
-                        <div class="compare-chart-wrapper">
-                            <canvas id="compareHumidityChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Ostatní grafy (baterie, srážky) -->
-            <div class="chart-grid" id="chartsGrid" style="display: none;">
-                <!-- prázdné divy pro zachování canvas elementů temp/humidity/pressure (používají se v denních/měs. grafech) -->
-                <canvas id="tempChart" style="display:none;"></canvas>
-                <canvas id="humidityChart" style="display:none;"></canvas>
-                <canvas id="pressureChart" style="display:none;"></canvas>
-
-                <!-- Napětí baterie meteostanice -->
-                <div class="chart-container" id="batteryChartContainer">
-                    <h2 id="batteryChartTitle">🔋 Napětí baterie meteostanice</h2>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('battery')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('battery')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('battery')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="batteryChart"></canvas></div>
-                    <div class="chart-slider-container">
-                        <div class="chart-slider" id="batterySlider">
-                            <canvas class="chart-slider-preview" id="batterySliderPreview"></canvas>
-                            <div class="chart-slider-window" id="batterySliderWindow">
-                                <div class="chart-slider-handle left"></div>
-                                <div class="chart-slider-handle right"></div>
-                            </div>
-                        </div>
-                        <div class="slider-labels">
-                            <span id="batterySliderStart">-</span>
-                            <span id="batterySliderEnd">-</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Srážky - jen pro meteostanici -->
-                <div class="chart-container meteo-only">
-                    <h2>🌧️ Srážky</h2>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('rain')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('rain')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('rain')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="rainChart"></canvas></div>
-                    <div class="chart-slider-container">
-                        <div class="chart-slider" id="rainSlider">
-                            <canvas class="chart-slider-preview" id="rainSliderPreview"></canvas>
-                            <div class="chart-slider-window" id="rainSliderWindow">
-                                <div class="chart-slider-handle left"></div>
-                                <div class="chart-slider-handle right"></div>
-                            </div>
-                        </div>
-                        <div class="slider-labels">
-                            <span id="rainSliderStart">-</span>
-                            <span id="rainSliderEnd">-</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Baterie srážkoměru - jen pro meteostanici -->
-                <div class="chart-container meteo-only">
-                    <h2>🔋 Napětí baterie srážkoměru</h2>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('rainBattery')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('rainBattery')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('rainBattery')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="rainBatteryChart"></canvas></div>
-                    <div class="chart-slider-container">
-                        <div class="chart-slider" id="rainBatterySlider">
-                            <canvas class="chart-slider-preview" id="rainBatterySliderPreview"></canvas>
-                            <div class="chart-slider-window" id="rainBatterySliderWindow">
-                                <div class="chart-slider-handle left"></div>
-                                <div class="chart-slider-handle right"></div>
-                            </div>
-                        </div>
-                        <div class="slider-labels">
-                            <span id="rainBatterySliderStart">-</span>
-                            <span id="rainBatterySliderEnd">-</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Graf teplota + vlhkost -->
-            <div class="chart-container full-width" id="multiChart" style="display: none;">
-                <h2>📊 Teplota &amp; Vlhkost (2 osy Y)</h2>
-                <div class="chart-controls">
-                    <button onclick="resetZoom('all')">↺ Reset zoom</button>
-                    <button onclick="zoomIn('all')">🔍+ Přiblížit</button>
-                    <button onclick="zoomOut('all')">🔍- Oddálit</button>
-                </div>
-                <div class="chart-wrapper" style="height: 450px;"><canvas id="allParamsChart"></canvas></div>
-                <div class="chart-slider-container">
-                    <div class="chart-slider" id="allSlider">
-                        <canvas class="chart-slider-preview" id="allSliderPreview"></canvas>
-                        <div class="chart-slider-window" id="allSliderWindow">
-                            <div class="chart-slider-handle left"></div>
-                            <div class="chart-slider-handle right"></div>
-                        </div>
-                    </div>
-                    <div class="slider-labels">
-                        <span id="allSliderStart">-</span>
-                        <span id="allSliderEnd">-</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Heatmapa -->
-            <div class="heatmap-container" id="heatmapContainer" style="display: none;">
-                <h2>🔥 Roční heatmapa</h2>
-                <div style="display: flex; gap: 20px; margin-bottom: 15px; flex-wrap: wrap;">
-                    <div class="filter-group">
-                        <label>📅 Rok:</label>
-                        <select id="heatmapYear" onchange="updateHeatmapMetric()" style="padding: 8px 12px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; font-size: 0.95em;"></select>
-                    </div>
-                    <div class="filter-group">
-                        <label>📊 Zobrazit:</label>
-                        <select id="heatmapMetric" onchange="updateHeatmapMetric()" style="padding: 8px 12px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; font-size: 0.95em;">
-                            <option value="teplota">Teplota</option>
-                            <option value="vlhkost">Vlhkost</option>
-                            <option value="tlak" class="meteo-only-option">Tlak</option>
-                            <option value="srazky" class="meteo-only-option">Srážky</option>
-                        </select>
-                    </div>
-                </div>
-                <p style="color: #666; margin-bottom: 15px;" id="heatmapDescription">Průměrná teplota podle dne v roce a hodiny</p>
-                <div class="heatmap-wrapper">
-                    <div id="heatmapGrid"></div>
-                </div>
-                <div class="heatmap-legend">
-                    <span style="font-size: 0.85em; color: #666; font-weight: 600;" id="heatmapLegendLabel">Teplota:</span>
-                    <span style="font-size: 0.85em; color: #666;" id="heatmapMin">0°C</span>
-                    <div class="heatmap-legend-gradient" id="heatmapGradient"></div>
-                    <span style="font-size: 0.85em; color: #666;" id="heatmapMax">30°C</span>
-                </div>
-            </div>
-
-            <div class="chart-grid">
-                <div class="chart-container" id="distributionChart" style="display: none;">
-                    <h2>📊 Distribuce teplot</h2>
-                    <div class="chart-wrapper"><canvas id="distributionCanvas"></canvas></div>
-                </div>
-                <div class="chart-container" id="scatterChart" style="display: none;">
-                    <h2>🎯 Korelace: Teplota vs Vlhkost</h2>
-                    <div class="chart-wrapper"><canvas id="scatterCanvas"></canvas></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===== TAB: DENNÍ ===== -->
-        <div id="dailyTab" class="tab-content">
-            <div class="filters" id="dailyFilters" style="display: flex;">
-                <div class="filter-group">
-                    <label>📅 Období:</label>
-                    <select id="dailyTimeRange" onchange="updateDailyData()">
-                        <option value="7">Posledních 7 dní</option>
-                        <option value="14">Posledních 14 dní</option>
-                        <option value="30" selected>Posledních 30 dní</option>
-                        <option value="60">Posledních 60 dní</option>
-                        <option value="90">Posledních 90 dní</option>
-                        <option value="all">Všechna data</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label>Od:</label>
-                    <input type="date" id="dailyDateFrom" onchange="updateDailyData()">
-                </div>
-                <div class="filter-group">
-                    <label>Do:</label>
-                    <input type="date" id="dailyDateTo" onchange="updateDailyData()">
-                </div>
-            </div>
-
-            <div class="chart-grid" style="display: grid;">
-                <div class="chart-container">
-                    <h2>🌡️ Denní teploty</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Průměrná, minimální a maximální teplota za den</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('dailyTemp')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('dailyTemp')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('dailyTemp')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="dailyTempChart"></canvas></div>
-                </div>
-
-                <div class="chart-container">
-                    <h2>💧 Denní vlhkost</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Průměrná, minimální a maximální vlhkost za den</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('dailyHumidity')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('dailyHumidity')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('dailyHumidity')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="dailyHumidityChart"></canvas></div>
-                </div>
-
-                <div class="chart-container meteo-only">
-                    <h2>🌡️ Denní atmosférický tlak</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Průměrný, minimální a maximální tlak za den</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('dailyPressure')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('dailyPressure')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('dailyPressure')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="dailyPressureChart"></canvas></div>
-                </div>
-
-                <div class="chart-container meteo-only">
-                    <h2>🌧️ Denní srážky</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Úhrn srážek za den</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('dailyRain')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('dailyRain')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('dailyRain')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="dailyRainChart"></canvas></div>
-                </div>
-            </div>
-
-            <div class="table-container">
-                <h2>🌡️ Tabulka teplot</h2>
-                <table class="data-table" id="tempTable">
-                    <thead><tr><th>Den</th><th>Průměr</th><th>Minimum</th><th>Maximum</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-
-            <div class="table-container">
-                <h2>💧 Tabulka vlhkosti</h2>
-                <table class="data-table" id="humidityTable">
-                    <thead><tr><th>Den</th><th>Průměr</th><th>Minimum</th><th>Maximum</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-
-            <div class="table-container meteo-only">
-                <h2>🌡️ Tabulka tlaku</h2>
-                <table class="data-table" id="pressureTable">
-                    <thead><tr><th>Den</th><th>Průměr</th><th>Minimum</th><th>Maximum</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-
-            <div class="table-container meteo-only">
-                <h2>🌧️ Tabulka srážek</h2>
-                <table class="data-table" id="rainTable">
-                    <thead><tr><th>Den</th><th>Úhrn srážek (mm)</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- ===== TAB: MĚSÍČNÍ ===== -->
-        <div id="monthlyTab" class="tab-content">
-            <div class="filters" id="monthlyFilters" style="display: flex;">
-                <div class="filter-group">
-                    <label>📅 Období:</label>
-                    <select id="monthlyTimeRange" onchange="updateMonthlyData()">
-                        <option value="6">Posledních 6 měsíců</option>
-                        <option value="12" selected>Posledních 12 měsíců</option>
-                        <option value="24">Posledních 24 měsíců</option>
-                        <option value="all">Všechna data</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label>Od:</label>
-                    <input type="month" id="monthlyDateFrom" onchange="updateMonthlyData()">
-                </div>
-                <div class="filter-group">
-                    <label>Do:</label>
-                    <input type="month" id="monthlyDateTo" onchange="updateMonthlyData()">
-                </div>
-            </div>
-
-            <div class="chart-grid" style="display: grid;">
-                <div class="chart-container">
-                    <h2>🌡️ Měsíční teploty</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Průměrná, minimální a maximální teplota za měsíc</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('monthlyTemp')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('monthlyTemp')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('monthlyTemp')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="monthlyTempChart"></canvas></div>
-                </div>
-
-                <div class="chart-container">
-                    <h2>💧 Měsíční vlhkost</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Průměrná, minimální a maximální vlhkost za měsíc</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('monthlyHumidity')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('monthlyHumidity')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('monthlyHumidity')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="monthlyHumidityChart"></canvas></div>
-                </div>
-
-                <div class="chart-container meteo-only">
-                    <h2>🌡️ Měsíční atmosférický tlak</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Průměrný, minimální a maximální tlak za měsíc</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('monthlyPressure')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('monthlyPressure')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('monthlyPressure')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="monthlyPressureChart"></canvas></div>
-                </div>
-
-                <div class="chart-container meteo-only">
-                    <h2>🌧️ Měsíční srážky</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Úhrn srážek za měsíc</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('monthlyRain')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('monthlyRain')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('monthlyRain')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="monthlyRainChart"></canvas></div>
-                </div>
-            </div>
-
-            <div class="table-container">
-                <h2>🌡️ Tabulka teplot</h2>
-                <table class="data-table" id="monthlyTempTable">
-                    <thead><tr><th>Měsíc</th><th>Průměr</th><th>Minimum</th><th>Maximum</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-            <div class="table-container">
-                <h2>💧 Tabulka vlhkosti</h2>
-                <table class="data-table" id="monthlyHumidityTable">
-                    <thead><tr><th>Měsíc</th><th>Průměr</th><th>Minimum</th><th>Maximum</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-            <div class="table-container meteo-only">
-                <h2>🌡️ Tabulka tlaku</h2>
-                <table class="data-table" id="monthlyPressureTable">
-                    <thead><tr><th>Měsíc</th><th>Průměr</th><th>Minimum</th><th>Maximum</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-            <div class="table-container meteo-only">
-                <h2>🌧️ Tabulka srážek</h2>
-                <table class="data-table" id="monthlyRainTable">
-                    <thead><tr><th>Měsíc</th><th>Úhrn srážek (mm)</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- ===== TAB: ROČNÍ ===== -->
-        <div id="yearlyTab" class="tab-content">
-            <div class="filters" id="yearlyFilters" style="display: flex;">
-                <div class="filter-group">
-                    <label>📅 Rok od:</label>
-                    <input type="number" id="yearlyYearFrom" min="2020" max="2030" placeholder="2023" onchange="updateYearlyData()">
-                </div>
-                <div class="filter-group">
-                    <label>Rok do:</label>
-                    <input type="number" id="yearlyYearTo" min="2020" max="2030" placeholder="2025" onchange="updateYearlyData()">
-                </div>
-            </div>
-
-            <div class="chart-grid" style="display: grid;">
-                <div class="chart-container">
-                    <h2>🌡️ Roční teploty</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Průměrná, minimální a maximální teplota za rok</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('yearlyTemp')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('yearlyTemp')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('yearlyTemp')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="yearlyTempChart"></canvas></div>
-                </div>
-
-                <div class="chart-container">
-                    <h2>💧 Roční vlhkost</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Průměrná, minimální a maximální vlhkost za rok</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('yearlyHumidity')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('yearlyHumidity')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('yearlyHumidity')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="yearlyHumidityChart"></canvas></div>
-                </div>
-
-                <div class="chart-container meteo-only">
-                    <h2>🌡️ Roční atmosférický tlak</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Průměrný, minimální a maximální tlak za rok</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('yearlyPressure')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('yearlyPressure')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('yearlyPressure')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="yearlyPressureChart"></canvas></div>
-                </div>
-
-                <div class="chart-container meteo-only">
-                    <h2>🌧️ Roční srážky</h2>
-                    <p style="color: #666; margin-bottom: 15px; font-size: 0.9em;">Úhrn srážek za rok</p>
-                    <div class="chart-controls">
-                        <button onclick="resetZoom('yearlyRain')">↺ Reset zoom</button>
-                        <button onclick="zoomIn('yearlyRain')">🔍+ Přiblížit</button>
-                        <button onclick="zoomOut('yearlyRain')">🔍- Oddálit</button>
-                    </div>
-                    <div class="chart-wrapper"><canvas id="yearlyRainChart"></canvas></div>
-                </div>
-            </div>
-
-            <div class="table-container">
-                <h2>🌡️ Tabulka teplot</h2>
-                <table class="data-table" id="yearlyTempTable">
-                    <thead><tr><th>Rok</th><th>Průměr</th><th>Minimum</th><th>Maximum</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-            <div class="table-container">
-                <h2>💧 Tabulka vlhkosti</h2>
-                <table class="data-table" id="yearlyHumidityTable">
-                    <thead><tr><th>Rok</th><th>Průměr</th><th>Minimum</th><th>Maximum</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-            <div class="table-container meteo-only">
-                <h2>🌡️ Tabulka tlaku</h2>
-                <table class="data-table" id="yearlyPressureTable">
-                    <thead><tr><th>Rok</th><th>Průměr</th><th>Minimum</th><th>Maximum</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-            <div class="table-container meteo-only">
-                <h2>🌧️ Tabulka srážek</h2>
-                <table class="data-table" id="yearlyRainTable">
-                    <thead><tr><th>Rok</th><th>Úhrn srážek (mm)</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </div>
-
-    </div>
-
-    <script>
-        Chart.defaults.locale = 'cs-CZ';
-
-        // ===== KONFIGURACE API =====
-        const API_METEO_URL = 'https://meteosazava.baborovsky-jakub.workers.dev/';
-
-        const AUTO_REFRESH_INTERVAL = 15 * 60 * 1000;
-
-        // ===== STAV APLIKACE =====
-        let currentSource = 'meteostanice';
-        let rawData = [];
-        let currentData = [];
-        let dailyDataFiltered = [];
-        let monthlyDataFiltered = [];
-        let yearlyDataFiltered = [];
-        let charts = {};
-        let autoRefreshTimer = null;
-        let sliders = {};
-
-        // ===== DATA PRO SROVNÁVACÍ GRAF =====
-        let compareMeteoData = [];   // vždy data meteostanice
-        let compareSklenikData = []; // vždy data skleníku
-        let compareChartsInitialized = false;
-
-        // ===== KONFIGURACE ZDROJŮ DAT =====
-        const SOURCE_CONFIG = {
-            meteostanice: {
-                title: '⛅ Meteostanice - Sázava',
-                subtitle: 'Sázava - Černé Budy',
-                apiUrl: API_METEO_URL,
-                bodyClass: '',
-                hasPressure: true,
-                hasRain: true,
-                batteryLabel: 'NAPĚTÍ BATERIE METEOSTANICE',
-                batteryChartTitle: '🔋 Napětí baterie meteostanice',
-            },
-            sklenik: {
-                title: '🌿 Skleník',
-                subtitle: 'Data ze skleníku',
-                bodyClass: 'sklenik-mode',
-                hasPressure: false,
-                hasRain: false,
-                batteryLabel: 'NAPĚTÍ',
-                batteryChartTitle: '🔋 Napětí'
-            }
-        };
-
-        // ===== INICIALIZACE =====
-        window.addEventListener('DOMContentLoaded', function() {
-            loadData();
-            autoRefreshTimer = setInterval(loadData, AUTO_REFRESH_INTERVAL);
-            // Načíst data pro srovnávací graf ihned
-            loadCompareData();
-        });
-
-        // ===== SROVNÁVACÍ GRAF – NAČÍTÁNÍ DAT =====
-        async function loadCompareData() {
-            const badge = document.getElementById('compareStatusBadge');
-            if (badge) {
-                badge.className = 'compare-status-badge loading-badge';
-                badge.textContent = '⏳ Načítám data...';
-            }
-            try {
-                const [meteoResp, sklenikResp] = await Promise.all([
-                    fetch(API_METEO_URL, { method: 'GET', headers: { 'Accept': 'application/json' } }),
-                    fetch(API_METEO_URL + '?source=sklenik', { method: 'GET', headers: { 'Accept': 'application/json' } })
-                ]);
-                if (!meteoResp.ok || !sklenikResp.ok) throw new Error('Chyba při načítání dat pro srovnání');
-                const [meteoJson, sklenikJson] = await Promise.all([meteoResp.json(), sklenikResp.json()]);
-                if (!meteoJson.success || !sklenikJson.success) throw new Error('Neplatná data pro srovnání');
-
-                compareMeteoData = (meteoJson.data || []).map(row => {
-                    const datetime = new Date(row.datetime);
-                    if (isNaN(datetime.getTime())) return null;
-                    return { datetime, teplota: parseFloat(row.teplota) || 0, vlhkost: parseFloat(row.vlhkost) || 0 };
-                }).filter(Boolean).sort((a, b) => a.datetime - b.datetime);
-
-                compareSklenikData = (sklenikJson.data || []).map(row => {
-                    const datetime = new Date(row.datetime || row.datum_a_cas);
-                    if (isNaN(datetime.getTime())) return null;
-                    return { datetime, teplota: parseFloat(row.teplota) || 0, vlhkost: parseFloat(row.vlhkost) || 0 };
-                }).filter(Boolean).sort((a, b) => a.datetime - b.datetime);
-
-                if (badge) {
-                    badge.className = 'compare-status-badge ok-badge';
-                    badge.textContent = `✅ ${compareMeteoData.length} meteo + ${compareSklenikData.length} skleník záznamů`;
-                }
-                updateCompareChart();
-            } catch (err) {
-                if (badge) {
-                    badge.className = 'compare-status-badge error-badge';
-                    badge.textContent = '❌ Chyba: ' + err.message;
-                }
-            }
-        }
-
-        function filterByRange(data, rangeDays) {
-            if (rangeDays === 'all') return data;
-            const cutoff = new Date();
-            cutoff.setDate(cutoff.getDate() - parseInt(rangeDays));
-            return data.filter(d => d.datetime >= cutoff);
-        }
-
-        function updateCompareChart() {
-            const range = document.getElementById('compareTimeRange')?.value || '7';
-            const meteoFiltered = filterByRange(compareMeteoData, range);
-            const sklenikFiltered = filterByRange(compareSklenikData, range);
-
-            const zoomOptions = {
-                zoom: { wheel: { enabled: true, speed: 0.1 }, pinch: { enabled: true }, mode: 'x' },
-                pan: { enabled: true, mode: 'x' },
-                limits: { x: { min: 'original', max: 'original' } }
-            };
-            const xScaleOptions = {
-                type: 'time',
-                time: { unit: 'hour', displayFormats: { hour: 'HH:mm', day: 'dd.MM' }, tooltipFormat: 'dd.MM.yyyy HH:mm' },
-                ticks: { source: 'auto', maxRotation: 0 },
-                grid: { color: 'rgba(0,0,0,0.05)' }
-            };
-
-            // Teplota
-            if (!charts.compareTemp) {
-                const ctx = document.getElementById('compareTempChart');
-                if (ctx) {
-                    charts.compareTemp = new Chart(ctx, {
-                        type: 'line',
-                        data: { datasets: [] },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { display: false },
-                                zoom: zoomOptions,
-                                tooltip: { mode: 'index', intersect: false }
-                            },
-                            interaction: { mode: 'index', intersect: false },
-                            scales: {
-                                x: xScaleOptions,
-                                y: {
-                                    title: { display: true, text: '°C', font: { weight: 'bold' } },
-                                    grid: { color: 'rgba(0,0,0,0.05)' }
-                                }
-                            }
-                        }
-                    });
-                }
-            }
-
-            // Vlhkost
-            if (!charts.compareHumidity) {
-                const ctx2 = document.getElementById('compareHumidityChart');
-                if (ctx2) {
-                    charts.compareHumidity = new Chart(ctx2, {
-                        type: 'line',
-                        data: { datasets: [] },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { display: false },
-                                zoom: zoomOptions,
-                                tooltip: { mode: 'index', intersect: false }
-                            },
-                            interaction: { mode: 'index', intersect: false },
-                            scales: {
-                                x: xScaleOptions,
-                                y: {
-                                    title: { display: true, text: '%', font: { weight: 'bold' } },
-                                    min: 0, max: 100,
-                                    grid: { color: 'rgba(0,0,0,0.05)' }
-                                }
-                            }
-                        }
-                    });
-                }
-            }
-
-            if (charts.compareTemp) {
-                charts.compareTemp.data.datasets = [
-                    {
-                        label: 'Teplota – Meteostanice',
-                        data: meteoFiltered.map(d => ({ x: d.datetime, y: d.teplota })),
-                        borderColor: '#e53935',
-                        backgroundColor: 'rgba(229,57,53,0.07)',
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
-                        tension: 0.3,
-                        fill: false
-                    },
-                    {
-                        label: 'Teplota – Skleník',
-                        data: sklenikFiltered.map(d => ({ x: d.datetime, y: d.teplota })),
-                        borderColor: '#22c55e',
-                        backgroundColor: 'rgba(34,197,94,0.07)',
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
-                        tension: 0.3,
-                        fill: false
-                    }
-                ];
-                charts.compareTemp.update();
-            }
-
-            if (charts.compareHumidity) {
-                charts.compareHumidity.data.datasets = [
-                    {
-                        label: 'Vlhkost – Meteostanice',
-                        data: meteoFiltered.map(d => ({ x: d.datetime, y: d.vlhkost })),
-                        borderColor: '#e53935',
-                        backgroundColor: 'rgba(229,57,53,0.07)',
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
-                        tension: 0.3,
-                        fill: false
-                    },
-                    {
-                        label: 'Vlhkost – Skleník',
-                        data: sklenikFiltered.map(d => ({ x: d.datetime, y: d.vlhkost })),
-                        borderColor: '#22c55e',
-                        backgroundColor: 'rgba(34,197,94,0.07)',
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
-                        tension: 0.3,
-                        fill: false
-                    }
-                ];
-                charts.compareHumidity.update();
-            }
-        }
-
-        // ===== PŘEPÍNÁNÍ ZDROJE DAT =====
-        function switchDataSource(source) {
-            if (source === currentSource) return;
-
-            currentSource = source;
-            const config = SOURCE_CONFIG[source];
-
-            document.body.className = config.bodyClass;
-            document.getElementById('headerTitle').textContent = config.title;
-            document.getElementById('headerSubtitle').textContent = config.subtitle;
-
-            document.getElementById('btnMeteo').classList.toggle('active', source === 'meteostanice');
-            document.getElementById('btnSklenik').classList.toggle('active', source === 'sklenik');
-
-            document.querySelector('.container').classList.add('source-transition');
-            setTimeout(() => document.querySelector('.container').classList.remove('source-transition'), 500);
-
-            document.getElementById('batteryChartTitle').textContent = config.batteryChartTitle;
-
-            updateMeteoOnlyVisibility(config.hasPressure);
-            updateHeatmapOptions(config.hasPressure);
-
-            destroyAllCharts();
-            charts = {};
-            sliders = {};
-            rawData = [];
-            comboSeriesVisible = { temp: true, humidity: true, pressure: true };
-
-            loadData();
-        }
-
-        function updateMeteoOnlyVisibility(show) {
-            document.querySelectorAll('.meteo-only').forEach(el => {
-                el.style.display = show ? '' : 'none';
-            });
-        }
-
-        function updateHeatmapOptions(hasPressure) {
-            const metricSelect = document.getElementById('heatmapMetric');
-            const currentVal = metricSelect.value;
-            document.querySelectorAll('.meteo-only-option').forEach(opt => {
-                opt.disabled = !hasPressure;
-                opt.style.display = hasPressure ? '' : 'none';
-            });
-            if (!hasPressure && (currentVal === 'tlak' || currentVal === 'srazky')) {
-                metricSelect.value = 'teplota';
-            }
-        }
-
-        // ===== NAČÍTÁNÍ DAT =====
-        async function loadData() {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('loading').textContent = '⏳ Načítám data...';
-            document.getElementById('error').style.display = 'none';
-            document.getElementById('success').style.display = 'none';
-
-            const BASE_WORKER = 'https://meteosazava.baborovsky-jakub.workers.dev/';
-            const apiUrl = currentSource === 'sklenik'
-                ? BASE_WORKER + '?source=sklenik'
-                : BASE_WORKER;
-
-            const calledForSource = currentSource;
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' }
-                });
-
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-                const jsonData = await response.json();
-
-                if (!jsonData.success) throw new Error(jsonData.error || 'Chyba při načítání dat');
-
-                if (calledForSource !== currentSource) return;
-
-                if (calledForSource === 'sklenik') {
-                    parseSklenikResponse(jsonData.data);
-                } else {
-                    parseMeteoResponse(jsonData.data);
-                }
-
-                document.getElementById('lastUpdate').textContent =
-                    `Poslední aktualizace: ${new Date().toLocaleString('cs-CZ')} | Načteno ${rawData.length} záznamů | Zdroj: ${currentSource === 'sklenik' ? '🌿 Skleník' : '⛅ Meteostanice'}`;
-
-                document.getElementById('success').textContent =
-                    `✅ Úspěšně načteno ${rawData.length} měření!`;
-                document.getElementById('success').style.display = 'block';
-                setTimeout(() => { document.getElementById('success').style.display = 'none'; }, 5000);
-            } catch (error) {
-                showError(error.message);
-            }
-        }
-
-        function parseMeteoResponse(data) {
-            try {
-                if (!Array.isArray(data) || data.length === 0) throw new Error('Žádná data v databázi');
-
-                rawData = data.map(row => {
-                    const datetime = new Date(row.datetime);
-                    if (isNaN(datetime.getTime())) return null;
-                    return {
-                        datetime,
-                        teplota: parseFloat(row.teplota) || 0,
-                        vlhkost: parseFloat(row.vlhkost) || 0,
-                        tlak: parseFloat(row.tlak) || 0,
-                        baterie: parseFloat(row.baterie) || 0,
-                        srazky: parseFloat(row.srazky) || 0,
-                        baterieSrazkomeru: parseFloat(row.baterieSrazkomeru) || 0
-                    };
-                }).filter(item => item !== null);
-
-                finishParsing();
-            } catch (error) {
-                showError('Chyba zpracování dat meteostanice: ' + error.message);
-            }
-        }
-
-        function parseSklenikResponse(data) {
-            try {
-                if (!Array.isArray(data) || data.length === 0) throw new Error('Žádná data skleníku v databázi');
-
-                rawData = data.map(row => {
-                    const datetime = new Date(row.datetime || row.datum_a_cas);
-                    if (isNaN(datetime.getTime())) return null;
-                    return {
-                        datetime,
-                        teplota: parseFloat(row.teplota) || 0,
-                        vlhkost: parseFloat(row.vlhkost) || 0,
-                        tlak: 0,
-                        baterie: parseFloat(row.napeti || row.baterie) || 0,
-                        srazky: 0,
-                        baterieSrazkomeru: 0
-                    };
-                }).filter(item => item !== null);
-
-                finishParsing();
-            } catch (error) {
-                showError('Chyba zpracování dat skleníku: ' + error.message);
-            }
-        }
-
-        function finishParsing() {
-            if (rawData.length === 0) throw new Error('Žádná platná data po zpracování');
-
-            rawData.sort((a, b) => a.datetime - b.datetime);
-
-            populateYearDropdown();
-
-            document.getElementById('loading').style.display = 'none';
-            showDashboard();
-
-            if (Object.keys(charts).length === 0) {
-                initializeCharts();
-                initializeSliders();
-            }
-
-            updateCurrentData();
-            updateStats(rawData);
-
-            const config = SOURCE_CONFIG[currentSource];
-            updateMeteoOnlyVisibility(config.hasPressure);
-            updateHeatmapOptions(config.hasPressure);
-        }
-
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab').forEach(btn => btn.classList.remove('active'));
-
-            if (tabName === 'current') {
-                document.getElementById('currentTab').classList.add('active');
-                document.querySelector('.tab:nth-child(1)').classList.add('active');
-            } else if (tabName === 'daily') {
-                document.getElementById('dailyTab').classList.add('active');
-                document.querySelector('.tab:nth-child(2)').classList.add('active');
-                updateDailyData();
-            } else if (tabName === 'monthly') {
-                document.getElementById('monthlyTab').classList.add('active');
-                document.querySelector('.tab:nth-child(3)').classList.add('active');
-                updateMonthlyData();
-            } else if (tabName === 'yearly') {
-                document.getElementById('yearlyTab').classList.add('active');
-                document.querySelector('.tab:nth-child(4)').classList.add('active');
-                updateYearlyData();
-            }
-        }
-
-        function resetZoom(chartName) { if (charts[chartName]) charts[chartName].resetZoom(); }
-        function zoomIn(chartName) { if (charts[chartName]) charts[chartName].zoom(1.1); }
-        function zoomOut(chartName) { if (charts[chartName]) charts[chartName].zoom(0.9); }
-
-        function destroyAllCharts() {
-            Object.values(charts).forEach(chart => {
-                if (chart && typeof chart.destroy === 'function') chart.destroy();
-            });
-            charts.combo = null;
-            // Nezničit srovnávací grafy – ty jsou nezávislé na zdroji
-        }
-
-        function updateCurrentData() {
-            const range = document.getElementById('currentTimeRange')?.value || '7';
-            const dateFrom = document.getElementById('currentDateFrom')?.value;
-            const dateTo = document.getElementById('currentDateTo')?.value;
-
-            currentData = [...rawData];
-
-            if (dateFrom) {
-                const from = new Date(dateFrom);
-                currentData = currentData.filter(d => d.datetime >= from);
-            }
-            if (dateTo) {
-                const to = new Date(dateTo);
-                currentData = currentData.filter(d => d.datetime <= to);
-            }
-            if (!dateFrom && !dateTo && range !== 'all') {
-                const cutoff = new Date();
-                cutoff.setDate(cutoff.getDate() - parseInt(range));
-                currentData = currentData.filter(d => d.datetime >= cutoff);
-            }
-
-            updateAllCharts(currentData);
-            updateHeatmap(rawData);
-
-            ['combo', 'battery', 'rain', 'rainBattery', 'all', 'quad'].forEach(name => {
-                const sliderWindow = document.getElementById(`${name}SliderWindow`);
-                if (sliderWindow) {
-                    sliderWindow.style.left = '0%';
-                    sliderWindow.style.width = '100%';
-                    sliderWindow.style.right = '';
-                }
-            });
-        }
-
-        function updateDailyData() {
-            const range = document.getElementById('dailyTimeRange')?.value || '30';
-            const dateFrom = document.getElementById('dailyDateFrom')?.value;
-            const dateTo = document.getElementById('dailyDateTo')?.value;
-
-            let filteredRaw = [...rawData];
-            if (dateFrom) filteredRaw = filteredRaw.filter(d => d.datetime >= new Date(dateFrom + 'T00:00:00'));
-            if (dateTo) filteredRaw = filteredRaw.filter(d => d.datetime <= new Date(dateTo + 'T23:59:59'));
-            if (!dateFrom && !dateTo && range !== 'all') {
-                const cutoff = new Date();
-                cutoff.setDate(cutoff.getDate() - parseInt(range));
-                filteredRaw = filteredRaw.filter(d => d.datetime >= cutoff);
-            }
-
-            dailyDataFiltered = aggregateDailyData(filteredRaw);
-            updateDailyCharts();
-            updateDailyTables();
-        }
-
-        function updateMonthlyData() {
-            const range = document.getElementById('monthlyTimeRange')?.value || '12';
-            const dateFrom = document.getElementById('monthlyDateFrom')?.value;
-            const dateTo = document.getElementById('monthlyDateTo')?.value;
-
-            let filteredRaw = [...rawData];
-            if (dateFrom) {
-                const [year, month] = dateFrom.split('-');
-                filteredRaw = filteredRaw.filter(d => d.datetime >= new Date(parseInt(year), parseInt(month) - 1, 1));
-            }
-            if (dateTo) {
-                const [year, month] = dateTo.split('-');
-                filteredRaw = filteredRaw.filter(d => d.datetime <= new Date(parseInt(year), parseInt(month), 0, 23, 59, 59));
-            }
-            if (!dateFrom && !dateTo && range !== 'all') {
-                const cutoff = new Date();
-                cutoff.setMonth(cutoff.getMonth() - parseInt(range));
-                filteredRaw = filteredRaw.filter(d => d.datetime >= cutoff);
-            }
-
-            monthlyDataFiltered = aggregateMonthlyData(filteredRaw);
-            updateMonthlyCharts();
-            updateMonthlyTables();
-        }
-
-        function updateYearlyData() {
-            const yearFrom = document.getElementById('yearlyYearFrom')?.value;
-            const yearTo = document.getElementById('yearlyYearTo')?.value;
-
-            let filteredRaw = [...rawData];
-            if (yearFrom) filteredRaw = filteredRaw.filter(d => d.datetime.getFullYear() >= parseInt(yearFrom));
-            if (yearTo) filteredRaw = filteredRaw.filter(d => d.datetime.getFullYear() <= parseInt(yearTo));
-
-            yearlyDataFiltered = aggregateYearlyData(filteredRaw);
-            updateYearlyCharts();
-            updateYearlyTables();
-        }
-
-        function aggregateDailyData(data) {
-            const dailyMap = {};
-            data.forEach(d => {
-                const dateKey = d.datetime.toISOString().split('T')[0];
-                if (!dailyMap[dateKey]) {
-                    dailyMap[dateKey] = { date: new Date(dateKey + 'T12:00:00'), teplota: [], vlhkost: [], tlak: [], srazky: 0 };
-                }
-                dailyMap[dateKey].teplota.push(d.teplota);
-                dailyMap[dateKey].vlhkost.push(d.vlhkost);
-                dailyMap[dateKey].tlak.push(d.tlak);
-                dailyMap[dateKey].srazky += d.srazky;
-            });
-            return Object.values(dailyMap).map(day => ({
-                date: day.date,
-                teplotaAvg: day.teplota.reduce((a, b) => a + b, 0) / day.teplota.length,
-                teplotaMin: Math.min(...day.teplota),
-                teplotaMax: Math.max(...day.teplota),
-                vlhkostAvg: day.vlhkost.reduce((a, b) => a + b, 0) / day.vlhkost.length,
-                vlhkostMin: Math.min(...day.vlhkost),
-                vlhkostMax: Math.max(...day.vlhkost),
-                tlakAvg: day.tlak.reduce((a, b) => a + b, 0) / day.tlak.length,
-                tlakMin: Math.min(...day.tlak),
-                tlakMax: Math.max(...day.tlak),
-                srazkyTotal: day.srazky
-            })).sort((a, b) => a.date - b.date);
-        }
-
-        function aggregateMonthlyData(data) {
-            const monthlyMap = {};
-            data.forEach(d => {
-                const monthKey = `${d.datetime.getFullYear()}-${String(d.datetime.getMonth() + 1).padStart(2, '0')}`;
-                if (!monthlyMap[monthKey]) {
-                    monthlyMap[monthKey] = { date: new Date(d.datetime.getFullYear(), d.datetime.getMonth(), 15), teplota: [], vlhkost: [], tlak: [], srazky: 0 };
-                }
-                monthlyMap[monthKey].teplota.push(d.teplota);
-                monthlyMap[monthKey].vlhkost.push(d.vlhkost);
-                monthlyMap[monthKey].tlak.push(d.tlak);
-                monthlyMap[monthKey].srazky += d.srazky;
-            });
-            return Object.values(monthlyMap).map(month => ({
-                date: month.date,
-                teplotaAvg: month.teplota.reduce((a, b) => a + b, 0) / month.teplota.length,
-                teplotaMin: Math.min(...month.teplota),
-                teplotaMax: Math.max(...month.teplota),
-                vlhkostAvg: month.vlhkost.reduce((a, b) => a + b, 0) / month.vlhkost.length,
-                vlhkostMin: Math.min(...month.vlhkost),
-                vlhkostMax: Math.max(...month.vlhkost),
-                tlakAvg: month.tlak.reduce((a, b) => a + b, 0) / month.tlak.length,
-                tlakMin: Math.min(...month.tlak),
-                tlakMax: Math.max(...month.tlak),
-                srazkyTotal: month.srazky
-            })).sort((a, b) => a.date - b.date);
-        }
-
-        function aggregateYearlyData(data) {
-            const yearlyMap = {};
-            data.forEach(d => {
-                const yearKey = d.datetime.getFullYear();
-                if (!yearlyMap[yearKey]) {
-                    yearlyMap[yearKey] = { year: yearKey, teplota: [], vlhkost: [], tlak: [], srazky: 0 };
-                }
-                yearlyMap[yearKey].teplota.push(d.teplota);
-                yearlyMap[yearKey].vlhkost.push(d.vlhkost);
-                yearlyMap[yearKey].tlak.push(d.tlak);
-                yearlyMap[yearKey].srazky += d.srazky;
-            });
-            return Object.values(yearlyMap).map(year => ({
-                year: year.year,
-                teplotaAvg: year.teplota.reduce((a, b) => a + b, 0) / year.teplota.length,
-                teplotaMin: Math.min(...year.teplota),
-                teplotaMax: Math.max(...year.teplota),
-                vlhkostAvg: year.vlhkost.reduce((a, b) => a + b, 0) / year.vlhkost.length,
-                vlhkostMin: Math.min(...year.vlhkost),
-                vlhkostMax: Math.max(...year.vlhkost),
-                tlakAvg: year.tlak.reduce((a, b) => a + b, 0) / year.tlak.length,
-                tlakMin: Math.min(...year.tlak),
-                tlakMax: Math.max(...year.tlak),
-                srazkyTotal: year.srazky
-            })).sort((a, b) => a.year - b.year);
-        }
-
-        function populateYearDropdown() {
-            const yearSelect = document.getElementById('heatmapYear');
-            if (!yearSelect) return;
-            const years = [...new Set(rawData.map(d => d.datetime.getFullYear()))].sort((a, b) => b - a);
-            yearSelect.innerHTML = '';
-            years.forEach(year => {
-                const option = document.createElement('option');
-                option.value = year;
-                option.textContent = year;
-                yearSelect.appendChild(option);
-            });
-            const currentYear = new Date().getFullYear();
-            if (years.includes(currentYear)) yearSelect.value = currentYear;
-        }
-
-        function showError(msg) {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('error').textContent = '❌ ' + msg;
-            document.getElementById('error').style.display = 'block';
-        }
-
-        function showDashboard() {
-            const hasPressure = SOURCE_CONFIG[currentSource].hasPressure;
-            document.getElementById('currentFilters').style.display = 'flex';
-            document.getElementById('statsGrid').style.display = 'grid';
-            document.getElementById('tabs').style.display = 'flex';
-            document.getElementById('comboChartContainer').style.display = 'block';
-            document.getElementById('compareChartContainer').style.display = 'block';
-            document.getElementById('chartsGrid').style.display = 'grid';
-            document.getElementById('multiChart').style.display = 'none';
-            document.getElementById('heatmapContainer').style.display = 'block';
-            document.getElementById('distributionChart').style.display = 'block';
-            document.getElementById('scatterChart').style.display = 'block';
-            const legendPressure = document.getElementById('legendPressure');
-            if (legendPressure) legendPressure.style.display = hasPressure ? 'flex' : 'none';
-            document.getElementById('comboChartTitle').textContent = hasPressure
-                ? '📈 Teplota / Vlhkost / Tlak'
-                : '📈 Teplota / Vlhkost';
-        }
-
-        function updateStats(data) {
-            const config = SOURCE_CONFIG[currentSource];
-            const stats = {
-                teplota: calcStatsWithTime(data.map(d => ({ value: d.teplota, time: d.datetime }))),
-                vlhkost: calcStatsWithTime(data.map(d => ({ value: d.vlhkost, time: d.datetime }))),
-                tlak: calcStatsWithTime(data.map(d => ({ value: d.tlak, time: d.datetime }))),
-                baterie: calcStatsWithTime(data.map(d => ({ value: d.baterie, time: d.datetime }))),
-                srazky: calcStatsWithTime(data.map(d => ({ value: d.srazky, time: d.datetime }))),
-                baterieSrazkomeru: calcStatsWithTime(data.map(d => ({ value: d.baterieSrazkomeru, time: d.datetime })))
-            };
-
-            let statsHtml = `
-                <div class="stat-card">
-                    <div class="stat-icon">🌡️</div>
-                    <div class="stat-label">TEPLOTA</div>
-                    <div class="stat-value">${stats.teplota.current.value.toFixed(1)}°C</div>
-                    <div class="stat-timestamp">📅 ${stats.teplota.current.time.toLocaleString('cs-CZ', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})}</div>
-                    <div class="stat-trend ${stats.teplota.trend >= 0 ? 'up' : 'down'}">${stats.teplota.trend >= 0 ? '↑' : '↓'} ${Math.abs(stats.teplota.trend).toFixed(1)}°C od předchozího</div>
-                    <div class="stat-meta">Min: ${stats.teplota.min.value.toFixed(1)}°C<br><small>${stats.teplota.min.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Max: ${stats.teplota.max.value.toFixed(1)}°C<br><small>${stats.teplota.max.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Průměr: ${stats.teplota.avg.toFixed(1)}°C</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon">💧</div>
-                    <div class="stat-label">VLHKOST</div>
-                    <div class="stat-value">${stats.vlhkost.current.value.toFixed(0)}%</div>
-                    <div class="stat-timestamp">📅 ${stats.vlhkost.current.time.toLocaleString('cs-CZ', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})}</div>
-                    <div class="stat-trend ${stats.vlhkost.trend >= 0 ? 'up' : 'down'}">${stats.vlhkost.trend >= 0 ? '↑' : '↓'} ${Math.abs(stats.vlhkost.trend).toFixed(1)}%</div>
-                    <div class="stat-meta">Min: ${stats.vlhkost.min.value.toFixed(0)}%<br><small>${stats.vlhkost.min.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Max: ${stats.vlhkost.max.value.toFixed(0)}%<br><small>${stats.vlhkost.max.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Průměr: ${stats.vlhkost.avg.toFixed(0)}%</div>
-                </div>`;
-
-            if (config.hasPressure) {
-                statsHtml += `
-                <div class="stat-card">
-                    <div class="stat-icon">🌡️</div>
-                    <div class="stat-label">ATMOSFÉRICKÝ TLAK</div>
-                    <div class="stat-value">${stats.tlak.current.value.toFixed(0)}</div>
-                    <div class="stat-timestamp">📅 ${stats.tlak.current.time.toLocaleString('cs-CZ',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})}</div>
-                    <div class="stat-trend ${stats.tlak.trend >= 0 ? 'up' : 'down'}">${stats.tlak.trend >= 0 ? '↑' : '↓'} ${Math.abs(stats.tlak.trend).toFixed(1)} hPa</div>
-                    <div class="stat-meta">Min: ${stats.tlak.min.value.toFixed(0)} hPa<br><small>${stats.tlak.min.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Max: ${stats.tlak.max.value.toFixed(0)} hPa<br><small>${stats.tlak.max.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Průměr: ${stats.tlak.avg.toFixed(0)} hPa</div>
-                </div>`;
-            }
-
-            statsHtml += `
-                <div class="stat-card">
-                    <div class="stat-icon">🔋</div>
-                    <div class="stat-label">${config.batteryLabel}</div>
-                    <div class="stat-value">${stats.baterie.current.value.toFixed(2)}V</div>
-                    <div class="stat-timestamp">📅 ${stats.baterie.current.time.toLocaleString('cs-CZ',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})}</div>
-                    <div class="stat-trend ${stats.baterie.trend >= 0 ? 'up' : 'down'}">${stats.baterie.trend >= 0 ? '↑' : '↓'} ${Math.abs(stats.baterie.trend).toFixed(2)}V</div>
-                    <div class="stat-meta">Min: ${stats.baterie.min.value.toFixed(2)}V<br><small>${stats.baterie.min.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Max: ${stats.baterie.max.value.toFixed(2)}V<br><small>${stats.baterie.max.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Průměr: ${stats.baterie.avg.toFixed(2)}V</div>
-                </div>`;
-
-            if (config.hasRain) {
-                statsHtml += `
-                <div class="stat-card">
-                    <div class="stat-icon">🌧️</div>
-                    <div class="stat-label">SRÁŽKY</div>
-                    <div class="stat-value">${stats.srazky.current.value.toFixed(1)}</div>
-                    <div class="stat-timestamp">📅 ${stats.srazky.current.time.toLocaleString('cs-CZ',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})}</div>
-                    <div class="stat-trend ${stats.srazky.trend >= 0 ? 'up' : 'down'}">${stats.srazky.trend >= 0 ? '↑' : '↓'} ${Math.abs(stats.srazky.trend).toFixed(1)} mm</div>
-                    <div class="stat-meta">Min: ${stats.srazky.min.value.toFixed(1)} mm<br><small>${stats.srazky.min.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Max: ${stats.srazky.max.value.toFixed(1)} mm<br><small>${stats.srazky.max.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Celkem: ${data.reduce((sum, d) => sum + d.srazky, 0).toFixed(1)} mm</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon">🔋</div>
-                    <div class="stat-label">NAPĚTÍ BATERIE SRÁŽKOMĚRU</div>
-                    <div class="stat-value">${stats.baterieSrazkomeru.current.value.toFixed(2)}V</div>
-                    <div class="stat-timestamp">📅 ${stats.baterieSrazkomeru.current.time.toLocaleString('cs-CZ',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})}</div>
-                    <div class="stat-trend ${stats.baterieSrazkomeru.trend >= 0 ? 'up' : 'down'}">${stats.baterieSrazkomeru.trend >= 0 ? '↑' : '↓'} ${Math.abs(stats.baterieSrazkomeru.trend).toFixed(2)}V</div>
-                    <div class="stat-meta">Min: ${stats.baterieSrazkomeru.min.value.toFixed(2)}V<br><small>${stats.baterieSrazkomeru.min.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Max: ${stats.baterieSrazkomeru.max.value.toFixed(2)}V<br><small>${stats.baterieSrazkomeru.max.time.toLocaleString('cs-CZ',{hour12:false})}</small><br>Průměr: ${stats.baterieSrazkomeru.avg.toFixed(2)}V</div>
-                </div>`;
-            }
-
-            document.getElementById('statsGrid').innerHTML = statsHtml;
-        }
-
-        function calcStatsWithTime(items) {
-            if (items.length === 0) return { current: {value:0,time:new Date()}, min:{value:0,time:new Date()}, max:{value:0,time:new Date()}, avg:0, trend:0 };
-            const values = items.map(i => i.value);
-            const current = items[items.length - 1];
-            const previous = items[Math.max(0, items.length - 10)];
-            const minValue = Math.min(...values), maxValue = Math.max(...values);
-            const minItem = items.find(i => i.value === minValue);
-            const maxItem = items.find(i => i.value === maxValue);
-            return {
-                current,
-                min: minItem,
-                max: maxItem,
-                avg: values.reduce((a, b) => a + b, 0) / values.length,
-                trend: current.value - previous.value
-            };
-        }
-
-        let comboSeriesVisible = { temp: true, humidity: true, pressure: true };
-
-        function toggleComboSeries(series) {
-            comboSeriesVisible[series] = !comboSeriesVisible[series];
-            const el = document.getElementById('legend' + series.charAt(0).toUpperCase() + series.slice(1));
-            if (el) el.classList.toggle('disabled', !comboSeriesVisible[series]);
-            if (charts.combo) {
-                const datasetIndex = series === 'temp' ? 0 : series === 'humidity' ? 1 : 2;
-                const meta = charts.combo.getDatasetMeta(datasetIndex);
-                meta.hidden = !comboSeriesVisible[series];
-                charts.combo.update();
-            }
-        }
-
-        function initializeCharts() {
-            const zoomOptions = {
-                zoom: {wheel:{enabled:true,speed:0.1}, pinch:{enabled:true}, mode:'x'},
-                pan: {enabled:true, mode:'x'},
-                limits: {x:{min:'original',max:'original'}}
-            };
-            const commonOptions = {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {legend:{display:true}, zoom:zoomOptions},
-                scales: {
-                    x: {
-                        type:'time',
-                        time:{unit:'hour', displayFormats:{hour:'HH:mm',day:'dd.MM'}, tooltipFormat:'dd.MM.yyyy HH:mm'},
-                        ticks:{source:'auto'}
-                    }
-                },
-                interaction: {mode:'index', intersect:false}
-            };
-
-            // ---- KOMBINOVANÝ GRAF ----
-            const comboCanvas = document.getElementById('comboChart');
-            if (comboCanvas) {
-                charts.combo = new Chart(comboCanvas, {
-                    type: 'line',
-                    data: { datasets: [] },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            zoom: zoomOptions,
-                            tooltip: {
-                                mode: 'index',
-                                intersect: false,
-                                callbacks: {
-                                    label: function(ctx) {
-                                        const ds = ctx.dataset;
-                                        return ' ' + ds.label + ': ' + ctx.parsed.y.toFixed(1) + ds.unit;
-                                    }
-                                }
-                            }
-                        },
-                        interaction: { mode: 'index', intersect: false },
-                        scales: {
-                            x: {
-                                type: 'time',
-                                time: { unit:'hour', displayFormats:{hour:'HH:mm', day:'dd.MM'}, tooltipFormat:'dd.MM.yyyy HH:mm' },
-                                ticks: { source:'auto', maxRotation: 0 },
-                                grid: { color: 'rgba(0,0,0,0.05)' }
-                            },
-                            yTemp: {
-                                type: 'linear',
-                                position: 'left',
-                                title: { display: true, text: '°C', color: '#ff6384', font:{weight:'bold'} },
-                                ticks: { color: '#ff6384' },
-                                grid: { color: 'rgba(255,99,132,0.08)' }
-                            },
-                            yHumidity: {
-                                type: 'linear',
-                                position: 'right',
-                                title: { display: true, text: '%', color: '#36a2eb', font:{weight:'bold'} },
-                                ticks: { color: '#36a2eb' },
-                                grid: { drawOnChartArea: false },
-                                min: 0, max: 100
-                            },
-                            yPressure: {
-                                type: 'linear',
-                                position: 'right',
-                                title: { display: true, text: 'hPa', color: '#ffa040', font:{weight:'bold'} },
-                                ticks: { color: '#ffa040' },
-                                grid: { drawOnChartArea: false },
-                                offset: true
-                            }
-                        }
-                    }
-                });
-            }
-
-            charts.temp = null;
-            charts.humidity = null;
-            charts.pressure = null;
-            charts.battery = new Chart(document.getElementById('batteryChart'), {type:'line', data:{datasets:[]}, options:commonOptions});
-            charts.rain = new Chart(document.getElementById('rainChart'), {type:'bar', data:{datasets:[]}, options:{...commonOptions, scales:{...commonOptions.scales, y:{beginAtZero:true}, y1:{position:'right',grid:{drawOnChartArea:false}}}}});
-            charts.rainBattery = new Chart(document.getElementById('rainBatteryChart'), {type:'line', data:{datasets:[]}, options:commonOptions});
-            charts.all = new Chart(document.getElementById('allParamsChart'), {type:'line', data:{datasets:[]}, options:{...commonOptions, scales:{x:{type:'time'}, yLeft:{position:'left'}, yRight:{position:'right',grid:{drawOnChartArea:false}}}}});
-            charts.distribution = new Chart(document.getElementById('distributionCanvas'), {type:'bar', data:{datasets:[]}, options:{responsive:true,maintainAspectRatio:false}});
-            charts.scatter = new Chart(document.getElementById('scatterCanvas'), {type:'scatter', data:{datasets:[]}, options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Teplota (°C)'}},y:{title:{display:true,text:'Vlhkost (%)'}}}}});
-
-            const dailyOptions = {...commonOptions, scales:{x:{type:'time', time:{unit:'day', displayFormats:{day:'dd.MM.yyyy'}, tooltipFormat:'dd.MM.yyyy'}}}};
-            charts.dailyTemp = new Chart(document.getElementById('dailyTempChart'), {type:'line', data:{datasets:[]}, options:dailyOptions});
-            charts.dailyHumidity = new Chart(document.getElementById('dailyHumidityChart'), {type:'line', data:{datasets:[]}, options:dailyOptions});
-            charts.dailyPressure = new Chart(document.getElementById('dailyPressureChart'), {type:'line', data:{datasets:[]}, options:dailyOptions});
-            charts.dailyRain = new Chart(document.getElementById('dailyRainChart'), {type:'bar', data:{datasets:[]}, options:{...dailyOptions, scales:{...dailyOptions.scales, y:{beginAtZero:true}}}});
-
-            const monthlyOptions = {
-                ...commonOptions,
-                scales: {
-                    x: {
-                        type:'time',
-                        time:{unit:'month', displayFormats:{month:'MMM yyyy'}},
-                        ticks:{callback:function(value){const date=new Date(value);const m=['Led','Úno','Bře','Dub','Kvě','Čvn','Čvc','Srp','Zář','Říj','Lis','Pro'];return m[date.getMonth()]+' '+date.getFullYear();}}
-                    }
-                }
-            };
-            charts.monthlyTemp = new Chart(document.getElementById('monthlyTempChart'), {type:'line', data:{datasets:[]}, options:monthlyOptions});
-            charts.monthlyHumidity = new Chart(document.getElementById('monthlyHumidityChart'), {type:'line', data:{datasets:[]}, options:monthlyOptions});
-            charts.monthlyPressure = new Chart(document.getElementById('monthlyPressureChart'), {type:'line', data:{datasets:[]}, options:monthlyOptions});
-            charts.monthlyRain = new Chart(document.getElementById('monthlyRainChart'), {type:'bar', data:{datasets:[]}, options:{...monthlyOptions, scales:{...monthlyOptions.scales, y:{beginAtZero:true}}}});
-
-            const yearlyOptions = {...commonOptions, scales:{x:{type:'linear', ticks:{stepSize:1, callback:function(value){return Math.floor(value);}}}}};
-            charts.yearlyTemp = new Chart(document.getElementById('yearlyTempChart'), {type:'line', data:{datasets:[]}, options:yearlyOptions});
-            charts.yearlyHumidity = new Chart(document.getElementById('yearlyHumidityChart'), {type:'line', data:{datasets:[]}, options:yearlyOptions});
-            charts.yearlyPressure = new Chart(document.getElementById('yearlyPressureChart'), {type:'line', data:{datasets:[]}, options:yearlyOptions});
-            charts.yearlyRain = new Chart(document.getElementById('yearlyRainChart'), {type:'bar', data:{datasets:[]}, options:{...yearlyOptions, scales:{...yearlyOptions.scales, y:{beginAtZero:true}}}});
-        }
-
-        function getMidnightAnnotations(data) {
-            const midnights = [];
-            if (!data || data.length === 0) return midnights;
-            let prevDate = null;
-            data.forEach(d => {
-                const day = d.datetime.toDateString();
-                if (prevDate && day !== prevDate) {
-                    const midnight = new Date(d.datetime);
-                    midnight.setHours(0, 0, 0, 0);
-                    midnights.push(midnight);
-                }
-                prevDate = day;
-            });
-            return midnights;
-        }
-
-        function updateComboChart(data) {
-            if (!charts.combo) return;
-            const hasPressure = SOURCE_CONFIG[currentSource].hasPressure;
-
-            const midnights = getMidnightAnnotations(data);
-            const annotations = {};
-            midnights.forEach((m, i) => {
-                annotations['midnight' + i] = {
-                    type: 'line',
-                    xMin: m,
-                    xMax: m,
-                    borderColor: 'rgba(0,0,0,0.13)',
-                    borderWidth: 1,
-                    borderDash: [4, 4],
-                    label: {
-                        content: '0:00',
-                        display: true,
-                        position: 'start',
-                        font: { size: 10 },
-                        color: '#aaa',
-                        backgroundColor: 'transparent',
-                        padding: 2
-                    }
-                };
-            });
-
-            const datasets = [
-                {
-                    label: 'Teplota',
-                    unit: ' °C',
-                    data: data.map(d => ({ x: d.datetime, y: d.teplota })),
-                    borderColor: '#ff6384',
-                    backgroundColor: 'rgba(255,99,132,0.0)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHoverRadius: 4,
-                    tension: 0.3,
-                    yAxisID: 'yTemp',
-                    fill: false
-                },
-                {
-                    label: 'Vlhkost',
-                    unit: ' %',
-                    data: data.map(d => ({ x: d.datetime, y: d.vlhkost })),
-                    borderColor: '#36a2eb',
-                    backgroundColor: 'rgba(54,162,235,0.0)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHoverRadius: 4,
-                    tension: 0.3,
-                    yAxisID: 'yHumidity',
-                    fill: false
-                }
-            ];
-
-            if (hasPressure) {
-                datasets.push({
-                    label: 'Tlak',
-                    unit: ' hPa',
-                    data: data.map(d => ({ x: d.datetime, y: d.tlak })),
-                    borderColor: '#ffa040',
-                    backgroundColor: 'rgba(255,160,64,0.0)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHoverRadius: 4,
-                    tension: 0.3,
-                    yAxisID: 'yPressure',
-                    fill: false
-                });
-            }
-
-            charts.combo.data.datasets = datasets;
-            charts.combo.options.scales.yPressure.display = hasPressure;
-            charts.combo.options.plugins.annotation = { annotations };
-
-            datasets.forEach((ds, i) => {
-                const key = i === 0 ? 'temp' : i === 1 ? 'humidity' : 'pressure';
-                const meta = charts.combo.getDatasetMeta(i);
-                meta.hidden = !comboSeriesVisible[key];
-            });
-
-            charts.combo.update();
-            drawSliderPreview('combo', data);
-        }
-
-        function updateAllCharts(data) {
-            updateComboChart(data);
-
-            if (charts.temp) charts.temp.data.datasets = [{label:'Teplota (°C)', data:data.map(d=>({x:d.datetime,y:d.teplota})), borderColor:'rgb(255,99,132)', tension:0.4, fill:true}];
-            if (charts.humidity) charts.humidity.data.datasets = [{label:'Vlhkost (%)', data:data.map(d=>({x:d.datetime,y:d.vlhkost})), borderColor:'rgb(54,162,235)', tension:0.4, fill:true}];
-            if (charts.pressure) charts.pressure.data.datasets = [{label:'Tlak (hPa)', data:data.map(d=>({x:d.datetime,y:d.tlak})), borderColor:'rgb(75,192,192)', tension:0.4, fill:true}];
-            charts.battery.data.datasets = [{label:'Napětí (V)', data:data.map(d=>({x:d.datetime,y:d.baterie})), borderColor:'rgb(255,206,86)', tension:0.4, fill:true}];
-
-            const dailyRainfall = calculateDailyRainfall(data);
-            charts.rain.data.datasets = [
-                {type:'bar', label:'Srážky (mm)', data:data.map(d=>({x:d.datetime,y:d.srazky})), backgroundColor:'rgba(54,162,235,0.7)', yAxisID:'y'},
-                {type:'line', label:'Kumulativní (mm)', data:dailyRainfall, borderColor:'rgb(255,99,132)', borderWidth:3, tension:0, fill:false, yAxisID:'y1'}
-            ];
-            charts.rainBattery.data.datasets = [{label:'Baterie srážkoměru (V)', data:data.map(d=>({x:d.datetime,y:d.baterieSrazkomeru})), borderColor:'rgb(153,102,255)', tension:0.4, fill:true}];
-            charts.all.data.datasets = [
-                {label:'Teplota (°C)', data:data.map(d=>({x:d.datetime,y:d.teplota})), borderColor:'rgb(255,99,132)', tension:0.4, yAxisID:'yLeft'},
-                {label:'Vlhkost (%)', data:data.map(d=>({x:d.datetime,y:d.vlhkost})), borderColor:'rgb(54,162,235)', tension:0.4, yAxisID:'yRight'}
-            ];
-
-            const tempBins = createHistogram(data.map(d=>d.teplota), 25);
-            charts.distribution.data = {labels:tempBins.labels, datasets:[{label:'Počet měření', data:tempBins.values, backgroundColor:'rgba(102,126,234,0.7)'}]};
-            charts.scatter.data.datasets = [{label:'Teplota vs Vlhkost', data:data.map(d=>({x:d.teplota,y:d.vlhkost})), backgroundColor:'rgba(102,126,234,0.5)', pointRadius:3}];
-
-            Object.values(charts).forEach(chart => { if (chart && typeof chart.update === 'function') chart.update(); });
-            ['combo','battery','rain','rainBattery'].forEach(name => { drawSliderPreview(name, data); });
-        }
-
-        function calculateDailyRainfall(data) {
-            const dailyData = {};
-            data.forEach(d => {
-                const dateKey = d.datetime.toDateString();
-                if (!dailyData[dateKey]) dailyData[dateKey] = {total:0, points:[]};
-                dailyData[dateKey].total += d.srazky;
-                dailyData[dateKey].points.push({x:d.datetime, y:dailyData[dateKey].total});
-            });
-            const result = [];
-            Object.values(dailyData).forEach(day => result.push(...day.points));
-            return result;
-        }
-
-        function createHistogram(data, bins) {
-            const min = Math.min(...data), max = Math.max(...data), step = (max - min) / bins;
-            const counts = new Array(bins).fill(0), labels = [];
-            for (let i = 0; i < bins; i++) labels.push((min + i * step).toFixed(1));
-            data.forEach(value => counts[Math.min(Math.floor((value - min) / step), bins - 1)]++);
-            return {labels, values: counts};
-        }
-
-        function updateDailyCharts() {
-            if (!dailyDataFiltered.length) return;
-            charts.dailyTemp.data.datasets = [
-                {label:'Průměr', data:dailyDataFiltered.map(d=>({x:d.date,y:d.teplotaAvg})), borderColor:'rgb(255,99,132)', tension:0.4, borderWidth:3},
-                {label:'Minimum', data:dailyDataFiltered.map(d=>({x:d.date,y:d.teplotaMin})), borderColor:'rgb(255,159,164)', tension:0.4},
-                {label:'Maximum', data:dailyDataFiltered.map(d=>({x:d.date,y:d.teplotaMax})), borderColor:'rgb(200,50,80)', tension:0.4}
-            ];
-            charts.dailyHumidity.data.datasets = [
-                {label:'Průměr', data:dailyDataFiltered.map(d=>({x:d.date,y:d.vlhkostAvg})), borderColor:'rgb(54,162,235)', tension:0.4, borderWidth:3},
-                {label:'Minimum', data:dailyDataFiltered.map(d=>({x:d.date,y:d.vlhkostMin})), borderColor:'rgb(100,180,240)', tension:0.4},
-                {label:'Maximum', data:dailyDataFiltered.map(d=>({x:d.date,y:d.vlhkostMax})), borderColor:'rgb(30,100,180)', tension:0.4}
-            ];
-            charts.dailyPressure.data.datasets = [
-                {label:'Průměr', data:dailyDataFiltered.map(d=>({x:d.date,y:d.tlakAvg})), borderColor:'rgb(255,206,86)', tension:0.4, borderWidth:3},
-                {label:'Minimum', data:dailyDataFiltered.map(d=>({x:d.date,y:d.tlakMin})), borderColor:'rgb(255,220,120)', tension:0.4},
-                {label:'Maximum', data:dailyDataFiltered.map(d=>({x:d.date,y:d.tlakMax})), borderColor:'rgb(200,160,50)', tension:0.4}
-            ];
-            charts.dailyRain.data.datasets = [{label:'Úhrn srážek', data:dailyDataFiltered.map(d=>({x:d.date,y:d.srazkyTotal})), backgroundColor:'rgba(54,162,235,0.7)'}];
-            [charts.dailyTemp, charts.dailyHumidity, charts.dailyPressure, charts.dailyRain].forEach(c => c.update());
-        }
-
-        function updateDailyTables() {
-            if (!dailyDataFiltered.length) return;
-            document.querySelector('#tempTable tbody').innerHTML = dailyDataFiltered.map(d=>`<tr><td>${d.date.toLocaleDateString('cs-CZ')}</td><td>${d.teplotaAvg.toFixed(1)} °C</td><td>${d.teplotaMin.toFixed(1)} °C</td><td>${d.teplotaMax.toFixed(1)} °C</td></tr>`).join('');
-            document.querySelector('#humidityTable tbody').innerHTML = dailyDataFiltered.map(d=>`<tr><td>${d.date.toLocaleDateString('cs-CZ')}</td><td>${d.vlhkostAvg.toFixed(1)} %</td><td>${d.vlhkostMin.toFixed(1)} %</td><td>${d.vlhkostMax.toFixed(1)} %</td></tr>`).join('');
-            document.querySelector('#pressureTable tbody').innerHTML = dailyDataFiltered.map(d=>`<tr><td>${d.date.toLocaleDateString('cs-CZ')}</td><td>${d.tlakAvg.toFixed(1)} hPa</td><td>${d.tlakMin.toFixed(1)} hPa</td><td>${d.tlakMax.toFixed(1)} hPa</td></tr>`).join('');
-            document.querySelector('#rainTable tbody').innerHTML = dailyDataFiltered.map(d=>`<tr><td>${d.date.toLocaleDateString('cs-CZ')}</td><td>${d.srazkyTotal.toFixed(2)} mm</td></tr>`).join('');
-        }
-
-        function updateMonthlyCharts() {
-            if (!monthlyDataFiltered.length) return;
-            charts.monthlyTemp.data.datasets = [
-                {label:'Průměr', data:monthlyDataFiltered.map(d=>({x:d.date,y:d.teplotaAvg})), borderColor:'rgb(255,99,132)', tension:0.4},
-                {label:'Minimum', data:monthlyDataFiltered.map(d=>({x:d.date,y:d.teplotaMin})), borderColor:'rgb(255,159,164)', tension:0.4},
-                {label:'Maximum', data:monthlyDataFiltered.map(d=>({x:d.date,y:d.teplotaMax})), borderColor:'rgb(200,50,80)', tension:0.4}
-            ];
-            charts.monthlyHumidity.data.datasets = [
-                {label:'Průměr', data:monthlyDataFiltered.map(d=>({x:d.date,y:d.vlhkostAvg})), borderColor:'rgb(54,162,235)', tension:0.4},
-                {label:'Minimum', data:monthlyDataFiltered.map(d=>({x:d.date,y:d.vlhkostMin})), borderColor:'rgb(100,180,240)', tension:0.4},
-                {label:'Maximum', data:monthlyDataFiltered.map(d=>({x:d.date,y:d.vlhkostMax})), borderColor:'rgb(30,100,180)', tension:0.4}
-            ];
-            charts.monthlyPressure.data.datasets = [
-                {label:'Průměr', data:monthlyDataFiltered.map(d=>({x:d.date,y:d.tlakAvg})), borderColor:'rgb(255,206,86)', tension:0.4},
-                {label:'Minimum', data:monthlyDataFiltered.map(d=>({x:d.date,y:d.tlakMin})), borderColor:'rgb(255,220,120)', tension:0.4},
-                {label:'Maximum', data:monthlyDataFiltered.map(d=>({x:d.date,y:d.tlakMax})), borderColor:'rgb(200,160,50)', tension:0.4}
-            ];
-            charts.monthlyRain.data.datasets = [{label:'Úhrn srážek', data:monthlyDataFiltered.map(d=>({x:d.date,y:d.srazkyTotal})), backgroundColor:'rgba(54,162,235,0.7)'}];
-            [charts.monthlyTemp, charts.monthlyHumidity, charts.monthlyPressure, charts.monthlyRain].forEach(c => c.update());
-        }
-
-        function updateMonthlyTables() {
-            if (!monthlyDataFiltered.length) return;
-            const getMonthNameCzech = (date) => {
-                const months = ['leden','únor','březen','duben','květen','červen','červenec','srpen','září','říjen','listopad','prosinec'];
-                return `${months[date.getMonth()]} ${date.getFullYear()}`;
-            };
-            document.querySelector('#monthlyTempTable tbody').innerHTML = monthlyDataFiltered.map(d=>`<tr><td>${getMonthNameCzech(d.date)}</td><td>${d.teplotaAvg.toFixed(1)} °C</td><td>${d.teplotaMin.toFixed(1)} °C</td><td>${d.teplotaMax.toFixed(1)} °C</td></tr>`).join('');
-            document.querySelector('#monthlyHumidityTable tbody').innerHTML = monthlyDataFiltered.map(d=>`<tr><td>${getMonthNameCzech(d.date)}</td><td>${d.vlhkostAvg.toFixed(1)} %</td><td>${d.vlhkostMin.toFixed(1)} %</td><td>${d.vlhkostMax.toFixed(1)} %</td></tr>`).join('');
-            document.querySelector('#monthlyPressureTable tbody').innerHTML = monthlyDataFiltered.map(d=>`<tr><td>${getMonthNameCzech(d.date)}</td><td>${d.tlakAvg.toFixed(1)} hPa</td><td>${d.tlakMin.toFixed(1)} hPa</td><td>${d.tlakMax.toFixed(1)} hPa</td></tr>`).join('');
-            document.querySelector('#monthlyRainTable tbody').innerHTML = monthlyDataFiltered.map(d=>`<tr><td>${getMonthNameCzech(d.date)}</td><td>${d.srazkyTotal.toFixed(2)} mm</td></tr>`).join('');
-        }
-
-        function updateYearlyCharts() {
-            if (!yearlyDataFiltered.length) return;
-            const years = yearlyDataFiltered.map(d=>d.year);
-            charts.yearlyTemp.data.labels = years;
-            charts.yearlyTemp.data.datasets = [
-                {label:'Průměr', data:yearlyDataFiltered.map(d=>d.teplotaAvg), borderColor:'rgb(255,99,132)', tension:0.4},
-                {label:'Minimum', data:yearlyDataFiltered.map(d=>d.teplotaMin), borderColor:'rgb(255,159,164)', tension:0.4},
-                {label:'Maximum', data:yearlyDataFiltered.map(d=>d.teplotaMax), borderColor:'rgb(200,50,80)', tension:0.4}
-            ];
-            charts.yearlyHumidity.data.labels = years;
-            charts.yearlyHumidity.data.datasets = [
-                {label:'Průměr', data:yearlyDataFiltered.map(d=>d.vlhkostAvg), borderColor:'rgb(54,162,235)', tension:0.4},
-                {label:'Minimum', data:yearlyDataFiltered.map(d=>d.vlhkostMin), borderColor:'rgb(100,180,240)', tension:0.4},
-                {label:'Maximum', data:yearlyDataFiltered.map(d=>d.vlhkostMax), borderColor:'rgb(30,100,180)', tension:0.4}
-            ];
-            charts.yearlyPressure.data.labels = years;
-            charts.yearlyPressure.data.datasets = [
-                {label:'Průměr', data:yearlyDataFiltered.map(d=>d.tlakAvg), borderColor:'rgb(255,206,86)', tension:0.4},
-                {label:'Minimum', data:yearlyDataFiltered.map(d=>d.tlakMin), borderColor:'rgb(255,220,120)', tension:0.4},
-                {label:'Maximum', data:yearlyDataFiltered.map(d=>d.tlakMax), borderColor:'rgb(200,160,50)', tension:0.4}
-            ];
-            charts.yearlyRain.data.labels = years;
-            charts.yearlyRain.data.datasets = [{label:'Úhrn srážek', data:yearlyDataFiltered.map(d=>d.srazkyTotal), backgroundColor:'rgba(54,162,235,0.7)'}];
-            [charts.yearlyTemp, charts.yearlyHumidity, charts.yearlyPressure, charts.yearlyRain].forEach(c => c.update());
-        }
-
-        function updateYearlyTables() {
-            if (!yearlyDataFiltered.length) return;
-            document.querySelector('#yearlyTempTable tbody').innerHTML = yearlyDataFiltered.map(d=>`<tr><td>${d.year}</td><td>${d.teplotaAvg.toFixed(1)} °C</td><td>${d.teplotaMin.toFixed(1)} °C</td><td>${d.teplotaMax.toFixed(1)} °C</td></tr>`).join('');
-            document.querySelector('#yearlyHumidityTable tbody').innerHTML = yearlyDataFiltered.map(d=>`<tr><td>${d.year}</td><td>${d.vlhkostAvg.toFixed(1)} %</td><td>${d.vlhkostMin.toFixed(1)} %</td><td>${d.vlhkostMax.toFixed(1)} %</td></tr>`).join('');
-            document.querySelector('#yearlyPressureTable tbody').innerHTML = yearlyDataFiltered.map(d=>`<tr><td>${d.year}</td><td>${d.tlakAvg.toFixed(1)} hPa</td><td>${d.tlakMin.toFixed(1)} hPa</td><td>${d.tlakMax.toFixed(1)} hPa</td></tr>`).join('');
-            document.querySelector('#yearlyRainTable tbody').innerHTML = yearlyDataFiltered.map(d=>`<tr><td>${d.year}</td><td>${d.srazkyTotal.toFixed(2)} mm</td></tr>`).join('');
-        }
-
-        function updateHeatmapMetric() { updateHeatmap(rawData); }
-
-        function updateHeatmap(data) {
-            const metric = document.getElementById('heatmapMetric')?.value || 'teplota';
-            const selectedYear = parseInt(document.getElementById('heatmapYear')?.value || new Date().getFullYear());
-            const daysInYear = isLeapYear(selectedYear) ? 366 : 365;
-
-            const matrix = Array(daysInYear).fill(null).map(() => Array(24).fill(null).map(() => []));
-
-            data.forEach(d => {
-                if (d.datetime.getFullYear() !== selectedYear) return;
-                const dayOfYear = getDayOfYear(d.datetime);
-                const hour = d.datetime.getHours();
-                if (dayOfYear >= 0 && dayOfYear < daysInYear && hour >= 0 && hour < 24) {
-                    let value;
-                    if (metric === 'teplota') value = d.teplota;
-                    else if (metric === 'vlhkost') value = d.vlhkost;
-                    else if (metric === 'tlak') value = d.tlak;
-                    else if (metric === 'srazky') value = d.srazky;
-                    matrix[dayOfYear][hour].push(value);
-                }
-            });
-
-            const avgMatrix = matrix.map(day => day.map(hours => hours.length > 0 ? hours.reduce((a,b)=>a+b,0)/hours.length : null));
-            const allValues = avgMatrix.flat().filter(t => t !== null);
-            if (allValues.length === 0) {
-                document.getElementById('heatmapGrid').innerHTML = '<p style="color:#999;padding:20px;">Nedostatek dat pro zobrazení heatmapy</p>';
-                return;
-            }
-
-            const minValue = Math.min(...allValues), maxValue = Math.max(...allValues);
-            let unit = '', label = '', description = '';
-            if (metric === 'teplota') { unit='°C'; label='Teplota:'; description='Průměrná teplota podle dne v roce a hodiny'; }
-            else if (metric === 'vlhkost') { unit='%'; label='Vlhkost:'; description='Průměrná vlhkost podle dne v roce a hodiny'; }
-            else if (metric === 'tlak') { unit=' hPa'; label='Tlak:'; description='Průměrný tlak podle dne v roce a hodiny'; }
-            else if (metric === 'srazky') { unit=' mm'; label='Srážky:'; description='Průměrné srážky podle dne v roce a hodiny'; }
-
-            document.getElementById('heatmapMin').textContent = minValue.toFixed(1) + unit;
-            document.getElementById('heatmapMax').textContent = maxValue.toFixed(1) + unit;
-            document.getElementById('heatmapLegendLabel').textContent = label;
-            document.getElementById('heatmapDescription').textContent = description;
-
-            const gradientEl = document.getElementById('heatmapGradient');
-            if (metric === 'teplota') gradientEl.style.background = 'linear-gradient(to right, #1a2a4a, #3c5c8c, #6b9bc4, #a8cde3, #f5dc78, #faa04a, #e8583a, #c83028, #8b0000)';
-            else if (metric === 'vlhkost' || metric === 'srazky') gradientEl.style.background = 'linear-gradient(to right, rgb(200,220,255), rgb(100,150,255), rgb(50,100,200), rgb(25,40,135))';
-            else if (metric === 'tlak') gradientEl.style.background = 'linear-gradient(to right, rgb(240,240,240), rgb(180,180,180), rgb(100,100,100), rgb(50,50,50))';
-
-            const heatmapDiv = document.getElementById('heatmapGrid');
-            heatmapDiv.innerHTML = '';
-            const gridContainer = document.createElement('div');
-            gridContainer.className = 'heatmap-grid';
-
-            const yLabels = document.createElement('div');
-            yLabels.className = 'heatmap-y-labels';
-            for (let hour = 0; hour < 24; hour++) {
-                const lbl = document.createElement('div');
-                lbl.className = 'heatmap-y-label';
-                lbl.textContent = hour + ':00';
-                yLabels.appendChild(lbl);
-            }
-            gridContainer.appendChild(yLabels);
-
-            const contentWrapper = document.createElement('div');
-            contentWrapper.className = 'heatmap-content-wrapper';
-
-            const xLabels = document.createElement('div');
-            xLabels.className = 'heatmap-x-labels';
-            const monthNames = ['Led','Úno','Bře','Dub','Kvě','Čvn','Čvc','Srp','Zář','Říj','Lis','Pro'];
-            const daysInMonth = [31, isLeapYear(selectedYear)?29:28, 31,30,31,30,31,31,30,31,30,31];
-            let cumulativeDays = 0;
-            monthNames.forEach((month, idx) => {
-                const monthLabel = document.createElement('div');
-                monthLabel.className = 'heatmap-month-label';
-                monthLabel.textContent = month;
-                monthLabel.style.left = ((cumulativeDays + daysInMonth[idx] / 2) / daysInYear * 100) + '%';
-                xLabels.appendChild(monthLabel);
-                cumulativeDays += daysInMonth[idx];
-            });
-            contentWrapper.appendChild(xLabels);
-
-            const dataDiv = document.createElement('div');
-            dataDiv.className = 'heatmap-data';
-            avgMatrix.forEach((dayData, dayIndex) => {
-                const dayColumn = document.createElement('div');
-                dayColumn.className = 'heatmap-day-column';
-                dayData.forEach((value, hour) => {
-                    const cell = document.createElement('div');
-                    cell.className = 'heatmap-hour-cell';
-                    if (value !== null) {
-                        cell.style.background = getColorForValue(value, minValue, maxValue, metric);
-                        const date = getDateFromDayOfYear(dayIndex, selectedYear);
-                        cell.title = `${date.getDate()}. ${date.getMonth()+1}. ${selectedYear} ${hour}:00 - ${value.toFixed(1)}${unit}`;
-                    } else {
-                        cell.style.background = '#e0e0e0';
-                    }
-                    dayColumn.appendChild(cell);
-                });
-                dataDiv.appendChild(dayColumn);
-            });
-            contentWrapper.appendChild(dataDiv);
-            gridContainer.appendChild(contentWrapper);
-            heatmapDiv.appendChild(gridContainer);
-        }
-
-        function isLeapYear(year) { return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0); }
-
-        function getDayOfYear(date) {
-            const tempDate = new Date(date.getTime());
-            tempDate.setHours(12, 0, 0, 0);
-            const start = new Date(tempDate.getFullYear(), 0, 1);
-            return Math.floor((tempDate - start) / (1000 * 60 * 60 * 24));
-        }
-
-        function getDateFromDayOfYear(dayOfYear, year) {
-            const date = new Date(year, 0, 1);
-            date.setDate(date.getDate() + dayOfYear);
-            return date;
-        }
-
-        function getColorForTemp(temp) {
-            let r, g, b;
-            if (temp < -5) { r=26; g=56; b=83; }
-            else if (temp < 0) { const ratio=(temp+5)/5; r=Math.round(26+ratio*(91-26)); g=Math.round(56+ratio*(143-56)); b=Math.round(83+ratio*(185-83)); }
-            else if (temp < 5) { const ratio=temp/5; r=Math.round(91+ratio*(136-91)); g=Math.round(143+ratio*(197-143)); b=Math.round(185+ratio*(221-185)); }
-            else if (temp < 10) { const ratio=(temp-5)/5; r=Math.round(136+ratio*(184-136)); g=Math.round(197+ratio*(224-197)); b=Math.round(221+ratio*(168-221)); }
-            else if (temp < 15) { const ratio=(temp-10)/5; r=Math.round(184+ratio*(245-184)); g=Math.round(224+ratio*(232-224)); b=Math.round(168+ratio*(125-168)); }
-            else if (temp < 20) { const ratio=(temp-15)/5; r=Math.round(245+ratio*(250-245)); g=Math.round(232+ratio*(172-232)); b=Math.round(125+ratio*(61-125)); }
-            else if (temp < 25) { const ratio=(temp-20)/5; r=Math.round(250+ratio*(248-250)); g=Math.round(172+ratio*(92-172)); b=Math.round(61+ratio*(60-61)); }
-            else if (temp < 30) { const ratio=(temp-25)/5; r=Math.round(248+ratio*(229-248)); g=Math.round(92+ratio*(53-92)); b=Math.round(60+ratio*(44-60)); }
-            else { r=200; g=16; b=16; }
-            return `rgb(${r}, ${g}, ${b})`;
-        }
-
-        function getColorForValue(value, minValue, maxValue, metric) {
-            const ratio = (value - minValue) / (maxValue - minValue || 1);
-            let r, g, b;
-            if (metric === 'teplota') return getColorForTemp(value);
-            else if (metric === 'vlhkost' || metric === 'srazky') {
-                r=Math.round(200-ratio*175); g=Math.round(220-ratio*180); b=Math.round(255-ratio*120);
-            } else if (metric === 'tlak') {
-                const gray=Math.round(240-ratio*190); r=gray; g=gray; b=gray;
-            }
-            return `rgb(${r}, ${g}, ${b})`;
-        }
-
-        function initializeSliders() {
-            const sliderNames = ['combo','battery','rain','rainBattery','all','quad'];
-            sliderNames.forEach(name => {
-                const sliderWindow = document.getElementById(`${name}SliderWindow`);
-                const slider = document.getElementById(`${name}Slider`);
-                if (!sliderWindow || !slider) return;
-                sliders[name] = {
-                    window: sliderWindow, slider, isDragging:false, isResizing:false,
-                    resizeHandle:null, startX:0, startLeft:0, startWidth:0, startRight:0
-                };
-                sliderWindow.style.left = '0%';
-                sliderWindow.style.width = '100%';
-                sliderWindow.style.right = '';
-
-                sliderWindow.addEventListener('mousedown', (e) => {
-                    if (e.target.classList.contains('chart-slider-handle')) return;
-                    handleSliderMouseDown(e, name);
-                });
-                const leftHandle = sliderWindow.querySelector('.chart-slider-handle.left');
-                const rightHandle = sliderWindow.querySelector('.chart-slider-handle.right');
-                if (leftHandle) leftHandle.addEventListener('mousedown', (e) => handleResizeStart(e, name, 'left'));
-                if (rightHandle) rightHandle.addEventListener('mousedown', (e) => handleResizeStart(e, name, 'right'));
-            });
-            document.addEventListener('mousemove', handleSliderMouseMove);
-            document.addEventListener('mouseup', handleSliderMouseUp);
-        }
-
-        function handleSliderMouseDown(e, name) {
-            const slider = sliders[name];
-            if (!slider) return;
-            slider.isDragging = true;
-            slider.startX = e.clientX;
-            const parentRect = slider.slider.getBoundingClientRect();
-            const windowRect = slider.window.getBoundingClientRect();
-            slider.startLeft = ((windowRect.left - parentRect.left) / parentRect.width) * 100;
-            slider.startWidth = (windowRect.width / parentRect.width) * 100;
-            e.preventDefault(); e.stopPropagation();
-        }
-
-        function handleResizeStart(e, name, handle) {
-            const slider = sliders[name];
-            if (!slider) return;
-            slider.isResizing = true;
-            slider.resizeHandle = handle;
-            slider.startX = e.clientX;
-            const parentRect = slider.slider.getBoundingClientRect();
-            const windowRect = slider.window.getBoundingClientRect();
-            slider.startLeft = ((windowRect.left - parentRect.left) / parentRect.width) * 100;
-            slider.startWidth = (windowRect.width / parentRect.width) * 100;
-            slider.startRight = slider.startLeft + slider.startWidth;
-            e.stopPropagation(); e.preventDefault();
-        }
-
-        function handleSliderMouseMove(e) {
-            let needsUpdate = false, updateName = null;
-            Object.keys(sliders).forEach(name => {
-                const slider = sliders[name];
-                if (!slider.isDragging && !slider.isResizing) return;
-                const parentRect = slider.slider.getBoundingClientRect();
-                const deltaX = e.clientX - slider.startX;
-                const deltaPercent = (deltaX / parentRect.width) * 100;
-                if (slider.isDragging) {
-                    let newLeft = slider.startLeft + deltaPercent;
-                    newLeft = Math.max(0, Math.min(100 - slider.startWidth, newLeft));
-                    slider.window.style.left = newLeft.toFixed(2) + '%';
-                    slider.window.style.width = slider.startWidth.toFixed(2) + '%';
-                    slider.window.style.right = '';
-                    needsUpdate = true; updateName = name;
-                } else if (slider.isResizing) {
-                    if (slider.resizeHandle === 'left') {
-                        let newLeft = slider.startLeft + deltaPercent;
-                        let newWidth = slider.startWidth - deltaPercent;
-                        const minWidth = 5;
-                        if (newWidth < minWidth) { newWidth = minWidth; newLeft = slider.startRight - minWidth; }
-                        newLeft = Math.max(0, newLeft);
-                        if (newLeft + newWidth > 100) newWidth = 100 - newLeft;
-                        slider.window.style.left = newLeft.toFixed(2) + '%';
-                        slider.window.style.width = newWidth.toFixed(2) + '%';
-                        slider.window.style.right = '';
-                    } else if (slider.resizeHandle === 'right') {
-                        let newWidth = slider.startWidth + deltaPercent;
-                        const minWidth = 5;
-                        newWidth = Math.max(minWidth, newWidth);
-                        newWidth = Math.min(100 - slider.startLeft, newWidth);
-                        slider.window.style.width = newWidth.toFixed(2) + '%';
-                        slider.window.style.right = '';
-                    }
-                    needsUpdate = true; updateName = name;
-                }
-            });
-            if (needsUpdate && updateName) updateChartFromSlider(updateName);
-        }
-
-        function handleSliderMouseUp() {
-            Object.keys(sliders).forEach(name => {
-                sliders[name].isDragging = false;
-                sliders[name].isResizing = false;
-                sliders[name].resizeHandle = null;
-            });
-        }
-
-        function updateChartFromSlider(name) {
-            if (name === 'combo') { if (!charts.combo || !currentData || !currentData.length) return; }
-            else if (!charts[name] || !currentData || !currentData.length) return;
-            const slider = sliders[name];
-            const parentRect = slider.slider.getBoundingClientRect();
-            const windowRect = slider.window.getBoundingClientRect();
-            const leftPercent = ((windowRect.left - parentRect.left) / parentRect.width) * 100;
-            const widthPercent = (windowRect.width / parentRect.width) * 100;
-            const rightPercent = leftPercent + widthPercent;
-            const startIndex = Math.max(0, Math.floor((leftPercent / 100) * currentData.length));
-            const endIndex = Math.min(currentData.length, Math.ceil((rightPercent / 100) * currentData.length));
-            const sliderData = currentData.slice(startIndex, endIndex);
-            if (sliderData.length === 0) return;
-            const startDate = sliderData[0].datetime;
-            const endDate = sliderData[sliderData.length - 1].datetime;
-            const startLabel = document.getElementById(`${name}SliderStart`);
-            const endLabel = document.getElementById(`${name}SliderEnd`);
-            if (startLabel) startLabel.textContent = startDate.toLocaleString('cs-CZ',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
-            if (endLabel) endLabel.textContent = endDate.toLocaleString('cs-CZ',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
-            updateSingleChart(name, sliderData);
-        }
-
-        function updateSingleChart(name, data) {
-            if (name === 'combo' && charts.combo) {
-                updateComboChart(data);
-                if (data.length > 0) { charts.combo.options.scales.x.min = data[0].datetime; charts.combo.options.scales.x.max = data[data.length-1].datetime; }
-                charts.combo.update('none');
-            } else if (name === 'battery' && charts.battery) {
-                charts.battery.data.datasets[0].data = data.map(d=>({x:d.datetime,y:d.baterie}));
-                if (data.length > 0) { charts.battery.options.scales.x.min = data[0].datetime; charts.battery.options.scales.x.max = data[data.length-1].datetime; }
-                charts.battery.update('none');
-            } else if (name === 'rain' && charts.rain) {
-                const dailyRainfall = calculateDailyRainfall(data);
-                charts.rain.data.datasets[0].data = data.map(d=>({x:d.datetime,y:d.srazky}));
-                charts.rain.data.datasets[1].data = dailyRainfall;
-                if (data.length > 0) { charts.rain.options.scales.x.min = data[0].datetime; charts.rain.options.scales.x.max = data[data.length-1].datetime; }
-                charts.rain.update('none');
-            } else if (name === 'rainBattery' && charts.rainBattery) {
-                charts.rainBattery.data.datasets[0].data = data.map(d=>({x:d.datetime,y:d.baterieSrazkomeru}));
-                if (data.length > 0) { charts.rainBattery.options.scales.x.min = data[0].datetime; charts.rainBattery.options.scales.x.max = data[data.length-1].datetime; }
-                charts.rainBattery.update('none');
-            } else if (name === 'all' && charts.all) {
-                charts.all.data.datasets[0].data = data.map(d=>({x:d.datetime,y:d.teplota}));
-                charts.all.data.datasets[1].data = data.map(d=>({x:d.datetime,y:d.vlhkost}));
-                if (data.length > 0) { charts.all.options.scales.x.min = data[0].datetime; charts.all.options.scales.x.max = data[data.length-1].datetime; }
-                charts.all.update('none');
-            }
-        }
-
-        function drawSliderPreview(name, data) {
-            const canvas = document.getElementById(`${name}SliderPreview`);
-            if (!canvas || !data.length) return;
-            const ctx = canvas.getContext('2d');
-            const width = canvas.width = canvas.offsetWidth * 2;
-            const height = canvas.height = canvas.offsetHeight * 2;
-            ctx.clearRect(0, 0, width, height);
-            let values;
-            if (name === 'combo') values = data.map(d=>d.teplota);
-            else if (name === 'temp') values = data.map(d=>d.teplota);
-            else if (name === 'humidity') values = data.map(d=>d.vlhkost);
-            else if (name === 'pressure') values = data.map(d=>d.tlak);
-            else if (name === 'battery') values = data.map(d=>d.baterie);
-            else if (name === 'rain') values = data.map(d=>d.srazky);
-            else if (name === 'rainBattery') values = data.map(d=>d.baterieSrazkomeru);
-            else if (name === 'all' || name === 'quad') values = data.map(d=>d.teplota);
-            if (!values || values.length === 0) return;
-            const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
-            ctx.beginPath();
-            ctx.strokeStyle = '#667eea';
-            ctx.lineWidth = 2;
-            values.forEach((val, i) => {
-                const x = (i / (values.length - 1)) * width;
-                const y = height - ((val - min) / range) * height * 0.8 - height * 0.1;
-                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
-        }
-    </script>
+<div class="wrap">
+<header>
+  <div>
+    <h1 id="title">⛅ Meteostanice</h1>
+    <div class="sub" id="subtitle">Sázava – Černé Budy</div>
+    <div class="live"><i></i><span id="last">Načítám…</span></div>
+  </div>
+  <div class="src">
+    <button id="bm" class="on" onclick="switchSource('meteostanice')">⛅ Meteostanice</button>
+    <button id="bs" onclick="switchSource('sklenik')">🌿 Skleník</button>
+  </div>
+</header>
+<div id="msg">⏳ Načítám data…</div>
+<div id="app" style="display:none">
+  <div id="alerts"></div>
+  <div class="thr"><b>Prahy:</b><label>Mráz ≤<input id="thFrost" type="number" step="0.5" value="3" onchange="setTh()">°C</label><label class="sk-only">Horko ≥<input id="thHot" type="number" value="30" onchange="setTh()">°C</label><label class="sk-only">Chlad ≤<input id="thCold" type="number" value="5" onchange="setTh()">°C</label></div>
+  <div class="stats" id="stats"></div>
+  <nav class="tabs">
+    <button class="tab on" onclick="switchTab('c')">📊 Aktuálně</button>
+    <button class="tab" onclick="switchTab('d')">📅 Denní</button>
+    <button class="tab" onclick="switchTab('m')">📆 Měsíční</button>
+    <button class="tab" onclick="switchTab('y')">📋 Roční</button>
+  </nav>
+  <section class="pane on" id="pane-c"></section>
+  <section class="pane" id="pane-d"></section>
+  <section class="pane" id="pane-m"></section>
+  <section class="pane" id="pane-y"></section>
+</div>
+</div>
+
+<script>
+const API='https://meteosazava.baborovsky-jakub.workers.dev/';
+const REFRESH=15*60*1000;
+const $=id=>document.getElementById(id);
+const css=v=>getComputedStyle(document.body).getPropertyValue(v).trim();
+const f=(v,d=1)=>(v==null||isNaN(v))?'–':v.toFixed(d).replace('.',',');
+const fd=(d,o)=>d.toLocaleString('cs-CZ',o);
+const DT={day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'};
+const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const mn=a=>a.reduce((x,y)=>y<x?y:x,Infinity);
+const mx=a=>a.reduce((x,y)=>y>x?y:x,-Infinity);
+const MON=['leden','únor','březen','duben','květen','červen','červenec','srpen','září','říjen','listopad','prosinec'];
+const M3=['led','úno','bře','dub','kvě','čvn','čvc','srp','zář','říj','lis','pro'];
+const kp=(t,v,s)=>`<div class="kpi"><span>${t}</span><b>${v}</b>${s?`<em>${s}</em>`:''}</div>`;
+const dew=(T,H)=>{if(H<=0)return T;const g=Math.log(H/100)+17.62*T/(243.12+T);return 243.12*g/(17.62-g);};
+const COL={T:'#ef4444',H:'#3b82f6',P:'#f59e0b',B:'#10b981',R:'#0ea5e9',RB:'#8b5cf6',A:'#6366f1',G:'#16a34a'};
+
+Chart.defaults.font.family="'IBM Plex Sans','Segoe UI',system-ui,sans-serif";
+Chart.defaults.color=css('--muted');
+Chart.defaults.borderColor=css('--line');
+
+const CFG={
+  meteostanice:{title:'⛅ Meteostanice',sub:'Sázava – Černé Budy',p:true,r:true,batt:'Napětí baterie meteostanice'},
+  sklenik:{title:'🌿 Skleník',sub:'Data ze skleníku',p:false,r:false,batt:'Napětí baterie skleníku'}
+};
+let source='meteostanice',tab='c',raw=[],charts={},dailyRows=[];
+const TH={frost:3,hot:30,cold:5};
+const store={meteostanice:null,sklenik:null},errs={};
+
+/* ---------- načítání ---------- */
+function parse(rows,sk){
+  return rows.map(r=>{
+    const t=new Date(r.datetime||r.datum_a_cas); if(isNaN(t))return null;
+    const n=k=>parseFloat(r[k])||0,T=n('teplota'),H=n('vlhkost');
+    return {t,T,H,D:dew(T,H),P:sk?0:n('tlak'),B:sk?(parseFloat(r.napeti||r.baterie)||0):n('baterie'),R:sk?0:n('srazky'),RB:sk?0:n('baterieSrazkomeru')};
+  }).filter(Boolean).sort((a,b)=>a.t-b.t);
+}
+async function fetchRows(s){
+  const r=await fetch(s==='sklenik'?API+'?source=sklenik':API,{headers:{Accept:'application/json'}});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const j=await r.json();
+  if(!j.success)throw new Error(j.error||'Chyba při načítání dat');
+  if(!Array.isArray(j.data)||!j.data.length)throw new Error('Žádná data v databázi');
+  return parse(j.data,s==='sklenik');
+}
+async function loadData(){
+  setMsg('⏳ Načítám data…');
+  const res=await Promise.allSettled([fetchRows('meteostanice'),fetchRows('sklenik')]);
+  ['meteostanice','sklenik'].forEach((s,i)=>{
+    if(res[i].status==='fulfilled'){store[s]=res[i].value;delete errs[s];}else errs[s]=res[i].reason.message;
+  });
+  render();
+}
+function setMsg(t,bad){const m=$('msg');m.textContent=t;m.className=bad?'bad':'';m.style.display=t?'block':'none';}
+
+/* ---------- filtry a panely ---------- */
+const FILTERS={
+  c:{type:'datetime-local',def:'7',opts:[[1,'Poslední den'],[3,'Poslední 3 dny'],[7,'Posledních 7 dní'],[14,'Posledních 14 dní'],[30,'Posledních 30 dní'],['all','Všechna data']]},
+  d:{type:'date',def:'30',opts:[[7,'Posledních 7 dní'],[14,'Posledních 14 dní'],[30,'Posledních 30 dní'],[60,'Posledních 60 dní'],[90,'Posledních 90 dní'],['all','Všechna data']]},
+  m:{type:'month',def:'12',opts:[[6,'Posledních 6 měsíců'],[12,'Posledních 12 měsíců'],[24,'Posledních 24 měsíců'],['all','Všechna data']]},
+  y:{type:'number'}
+};
+function filters(p){
+  const F=FILTERS[p];
+  const sel=F.opts?`<label>Období<select id="${p}Range" onchange="refresh('${p}')">${F.opts.map(([v,l])=>`<option value="${v}"${v==F.def?' selected':''}>${l}</option>`).join('')}</select></label>`:'';
+  const extra=p==='y'?' min="2020" max="2035" style="width:110px"':'';
+  return `<div class="filters">${sel}
+    <label>${p==='y'?'Rok od':'Od'}<input id="${p}From" type="${F.type}"${extra} onchange="refresh('${p}')"></label>
+    <label>${p==='y'?'Rok do':'Do'}<input id="${p}To" type="${F.type}"${extra} onchange="refresh('${p}')"></label>
+    <div class="ml"><button class="ghost" onclick="exportCsv('${p}')">⬇ CSV</button>${p==='c'?'<button class="btn" onclick="loadData()">🔄 Obnovit data</button>':''}</div></div>`;
+}
+const card=(id,title,sub,cls='')=>`<div class="card ${cls}"><div class="ch"><div><h2>${title}</h2>${sub?`<p>${sub}</p>`:''}</div><button class="ghost" title="Zoom: Ctrl + kolečko, posun: tažení" onclick="charts['${id}']&&charts['${id}'].resetZoom()">↺ Reset zoomu</button></div><div class="cw"><canvas id="${id}"></canvas></div></div>`;
+const DAYBOX=`<div class="card" id="dayDetail" style="display:none;margin-bottom:16px"><div class="ch"><div><h2 id="dayTitle"></h2><p>Průběh během dne</p></div><button class="ghost" onclick="document.getElementById('dayDetail').style.display='none'">✕ Zavřít</button></div><div class="kpis" id="dayKpis"></div><div class="cw"><canvas id="dayD"></canvas></div></div>`;
+const NAMES={d:'Denní',m:'Měsíční',y:'Roční'};
+function periodBody(p){
+  const n=NAMES[p];
+  return `${p==='d'?DAYBOX:''}<div class="kpis" id="${p}Kpis"></div><div class="grid">
+    ${card(p+'T','🌡️ '+n+' teploty','Sloupec = rozsah min–max, čára = průměr')}
+    ${card(p+'H','💧 '+n+' vlhkost','Sloupec = rozsah min–max, čára = průměr')}
+    ${card(p+'P','🧭 '+n+' tlak vzduchu','Sloupec = rozsah min–max, čára = průměr','meteo-only')}
+    ${card(p+'R','🌧️ '+n+' srážky','Sloupce = úhrn, čára = kumulativně za zvolené období','meteo-only')}
+  </div><div class="card"><div class="ch"><h2>📋 Přehled hodnot</h2></div><div class="tbl"><table id="${p}Table"></table></div></div>`;
+}
+function buildPanes(){
+  $('pane-c').innerHTML=filters('c')+`<div class="grid">
+    ${card('combo','📈 Teplota, rosný bod, vlhkost a tlak','Klik na legendu skryje řadu · Ctrl + kolečko přiblíží · tažením posunete','wide')}
+    <div class="wide kpis meteo-only" id="rainKpis" style="margin:0"></div><div class="wide kpis sk-only" id="skKpis" style="margin:0"></div>
+    ${card('rain','🌧️ Srážky','Úhrn po hodinách, čára = kumulativně za zvolené období','meteo-only')}
+    ${card('batt','🔋 Napětí baterie','Přerušovaná čára = průměr za období')}
+    ${card('rbatt','🔋 Napětí baterie srážkoměru','Přerušovaná čára = průměr za období','meteo-only')}
+    ${card('dist','📊 Distribuce teplot','Počet měření v jednotlivých teplotních pásmech')}
+    ${card('scat','🎯 Teplota vs. vlhkost','Každý bod = jedno měření')}
+    ${card('diur','🕒 Průměrný denní chod','Průměr podle hodiny dne za zvolené období, pás = rozsah teploty')}
+    <div class="card wide"><div class="ch"><div><h2>🏆 Rekordy</h2><p>Za všechna dostupná data zdroje</p></div></div><div class="kpis" id="records" style="margin:0"></div></div>
+    <div class="card wide"><div class="ch"><div><h2>🔀 Srovnání: skleník vs. meteostanice</h2><p>Stejné časové období v obou stanicích</p></div>
+      <div class="cmp"><label>Období<select id="cmpRange" onchange="updateCompare()"><option value="1">Poslední den</option><option value="3">Poslední 3 dny</option><option value="7" selected>Posledních 7 dní</option><option value="14">Posledních 14 dní</option><option value="30">Posledních 30 dní</option><option value="all">Všechna data</option></select></label><span class="badge" id="cmpBadge">…</span></div></div>
+      <div class="grid" style="margin:0"><div><div class="cw" style="height:300px"><canvas id="cmpT"></canvas></div></div><div><div class="cw" style="height:300px"><canvas id="cmpH"></canvas></div></div></div></div>
+    <div class="card wide"><div class="ch"><div><h2>🔥 Roční heatmapa</h2><p id="heatDesc"></p></div>
+      <div class="cmp"><label>Rok<select id="heatYear" onchange="updateHeat()"></select></label><label>Veličina<select id="heatMetric" onchange="updateHeat()"></select></label></div></div>
+      <div id="heatGrid"></div>
+      <div class="hl"><span id="heatMin"></span><i id="heatGrad"></i><span id="heatMax"></span></div></div>
+  </div>`;
+  ['d','m','y'].forEach(p=>$('pane-'+p).innerHTML=filters(p)+periodBody(p));
+  $('heatGrid').addEventListener('click',e=>{const c=e.target.closest('.hcol');if(c)showDay(new Date(+$('heatYear').value,0,1+ +c.dataset.d));});
+}
+
+/* ---------- filtrování dat ---------- */
+function span(p){
+  const a=$(p+'From')?.value,b=$(p+'To')?.value,sel=$(p+'Range')?.value;
+  if(p==='y')return [a?new Date(+a,0,1):null,b?new Date(+b,11,31,23,59,59):null];
+  const pd=(s,end)=>{
+    if(!s)return null;
+    if(/^\d{4}-\d{2}$/.test(s)){const [y,m]=s.split('-').map(Number);return end?new Date(y,m,0,23,59,59):new Date(y,m-1,1);}
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s))return new Date(s+(end?'T23:59:59':'T00:00:00'));
+    return new Date(s);
+  };
+  let from=pd(a,0),to=pd(b,1);
+  if(!from&&!to&&sel&&sel!=='all'){const c=new Date();if(p==='m')c.setMonth(c.getMonth()-+sel);else c.setDate(c.getDate()-+sel);from=c;}
+  return [from,to];
+}
+const inSpan=(data,p)=>{const [a,b]=span(p);return data.filter(d=>(!a||d.t>=a)&&(!b||d.t<=b));};
+
+/* ---------- agregace ---------- */
+const PK={
+  d:t=>+new Date(t.getFullYear(),t.getMonth(),t.getDate()),
+  m:t=>+new Date(t.getFullYear(),t.getMonth(),1),
+  y:t=>+new Date(t.getFullYear(),0,1)
+};
+const lbl=(p,t)=>p==='d'?fd(t,{day:'numeric',month:'numeric',year:'2-digit'}):p==='m'?M3[t.getMonth()]+' '+String(t.getFullYear()).slice(2):String(t.getFullYear());
+const lblFull=(p,t)=>p==='d'?fd(t,{weekday:'short',day:'numeric',month:'numeric',year:'numeric'}):p==='m'?MON[t.getMonth()]+' '+t.getFullYear():String(t.getFullYear());
+function aggregate(data,p){
+  const m=new Map();
+  data.forEach(d=>{
+    const k=PK[p](d.t);let g=m.get(k);
+    if(!g){g={t:new Date(k),T:[],H:[],P:[],R:0};m.set(k,g);}
+    g.T.push(d.T);g.H.push(d.H);g.P.push(d.P);g.R+=d.R;
+  });
+  return [...m.entries()].sort((a,b)=>a[0]-b[0]).map(([,g])=>({
+    t:g.t,Ta:avg(g.T),Tn:mn(g.T),Tx:mx(g.T),Ha:avg(g.H),Hn:mn(g.H),Hx:mx(g.H),Pa:avg(g.P),Pn:mn(g.P),Px:mx(g.P),R:g.R
+  }));
+}
+
+/* ---------- pomocné funkce pro grafy ---------- */
+function mk(id,cfg){
+  if(/^d[THPR]$/.test(id)){cfg.options.onClick=(e,el)=>{if(el.length&&dailyRows[el[0].index])showDay(dailyRows[el[0].index].t);};cfg.options.onHover=(e,el)=>{e.native.target.style.cursor=el.length?'pointer':'';};}
+ charts[id]&&charts[id].destroy();const el=$(id);if(el)charts[id]=new Chart(el,cfg);}
+const tipLabel=unit=>c=>{
+  if(Array.isArray(c.raw))return ` Rozsah: ${f(c.raw[0])} – ${f(c.raw[1])} ${unit}`;
+  return ` ${c.dataset.label}: ${f(c.parsed.y,c.dataset.dec??1)} ${c.dataset.unit??unit}`;
+};
+function opts(unit,sc={}){
+  const o={
+    responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{
+      legend:{position:'top',align:'end',labels:{usePointStyle:true,boxWidth:8,padding:14}},
+      tooltip:{padding:10,cornerRadius:8,callbacks:{label:tipLabel(unit)}},
+      zoom:{zoom:{wheel:{enabled:true,modifierKey:'ctrl'},pinch:{enabled:true},mode:'x'},pan:{enabled:true,mode:'x'}}
+    },
+    scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkipPadding:18}},y:{grace:'8%',title:{display:!!unit,text:unit}}}
+  };
+  Object.keys(sc).forEach(k=>o.scales[k]={...(o.scales[k]||{}),...sc[k]});
+  return o;
+}
+const timeX=(unit)=>({type:'time',time:{unit,tooltipFormat:'dd.MM.yyyy HH:mm',displayFormats:{minute:'HH:mm',hour:'dd.MM. HH:mm',day:'dd.MM.',month:'MM/yyyy'}}});
+const line=(label,data,color,o={})=>({type:'line',label,data,borderColor:color,backgroundColor:color+'26',borderWidth:2,pointRadius:0,pointHoverRadius:4,tension:.35,fill:false,...o});
+function ds(data,key,n=700){
+  if(data.length<=n)return data.map(d=>({x:d.t,y:d[key]}));
+  const s=data.length/n,out=[];
+  for(let i=0;i<n;i++){
+    const sl=data.slice(Math.floor(i*s),Math.floor((i+1)*s));
+    if(sl.length)out.push({x:sl[sl.length>>1].t,y:avg(sl.map(d=>d[key]))});
+  }
+  return out;
+}
+const meanLine=(data,key,color)=>{
+  if(data.length<2)return [];
+  const m=avg(data.map(d=>d[key]));
+  return [{type:'line',label:'Průměr',data:[{x:data[0].t,y:m},{x:data.at(-1).t,y:m}],borderColor:color,borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false}];
+};
+
+/* ---------- statistiky ---------- */
+function statCard(icon,label,rows,k,d,u,color){
+  const cur=rows.at(-1),prev=rows[Math.max(0,rows.length-10)],v=rows.map(r=>r[k]);
+  const i=v.indexOf(mn(v)),a=v.indexOf(mx(v)),tr=cur[k]-prev[k];
+  return `<div class="stat" style="--c:${color}"><div class="sh"><span>${icon}</span>${label}</div>
+    <div class="sv">${f(cur[k],d)}<small>${u}</small></div>
+    <div class="st ${tr>=0?'up':'dn'}">${tr>=0?'▲':'▼'} ${f(Math.abs(tr),d)} ${u}</div>
+    <div class="sm"><div><b>Min</b>${f(v[i],d)} ${u}<em>${fd(rows[i].t,DT)}</em></div><div><b>Max</b>${f(v[a],d)} ${u}<em>${fd(rows[a].t,DT)}</em></div><div><b>Ø</b>${f(avg(v),d)} ${u}</div></div></div>`;
+}
+function updateStats(){
+  const c=CFG[source],end=raw.at(-1).t;
+  let w=raw.filter(r=>r.t>=end-864e5);if(w.length<3)w=raw.slice(-50);
+  let h=statCard('🌡️','Teplota · 24 h',w,'T',1,'°C',COL.T)+statCard('💧','Vlhkost · 24 h',w,'H',0,'%',COL.H)+statCard('💠','Rosný bod · 24 h',w,'D',1,'°C','#14b8a6');
+  if(c.p)h+=statCard('🧭','Tlak · 24 h',w,'P',0,'hPa',COL.P);
+  h+=statCard('🔋',c.batt.replace('Napětí baterie','Baterie')+' · 24 h',w,'B',2,'V',COL.B);
+  if(c.r){
+    const sum=ms=>raw.filter(r=>r.t>=end-ms).reduce((a,r)=>a+r.R,0);
+    const mid=new Date(end);mid.setHours(0,0,0,0);
+    const today=raw.filter(r=>r.t>=mid).reduce((a,r)=>a+r.R,0);
+    h+=`<div class="stat" style="--c:${COL.R}"><div class="sh"><span>🌧️</span>Srážky</div><div class="sv">${f(sum(864e5))}<small>mm / 24 h</small></div>
+      <div class="st" style="color:var(--muted)">Dnes ${f(today)} mm</div>
+      <div class="sm"><div><b>7 dní</b>${f(sum(7*864e5))} mm</div><div><b>30 dní</b>${f(sum(30*864e5))} mm</div></div></div>`;
+    h+=statCard('🔋','Baterie srážkoměru · 24 h',w,'RB',2,'V',COL.RB);
+  }
+  $('stats').innerHTML=h;
+}
+
+/* ---------- záložka Aktuálně ---------- */
+function updateCurrent(){
+  const d=inSpan(raw,'c'),c=CFG[source];
+  if(!d.length){setMsg('V zvoleném období nejsou žádná data.');return;}
+  setMsg('');
+  comboChart('combo',d);
+  diurnal(d);if(source==='sklenik')skStats(d);
+
+  // baterie
+  const bo=opts('V',{x:timeX(),y:{grace:'10%'}});
+  mk('batt',{type:'line',data:{datasets:[line('Napětí',ds(d,'B'),COL.B,{fill:true,dec:2}),...meanLine(d,'B','#64748b')]},options:{...bo,plugins:{...bo.plugins,tooltip:{...bo.plugins.tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${f(c.parsed.y,2)} V`}}}}});
+  if(c.r){
+    mk('rbatt',{type:'line',data:{datasets:[line('Napětí',ds(d,'RB'),COL.RB,{fill:true,dec:2}),...meanLine(d,'RB','#64748b')]},options:{...bo,plugins:{...bo.plugins,tooltip:{...bo.plugins.tooltip,callbacks:{label:c=>` ${c.dataset.label}: ${f(c.parsed.y,2)} V`}}}}});
+    rainCurrent(d);
+  }
+  // distribuce a korelace
+  const T=d.map(r=>r.T),lo=mn(T),hi=mx(T),bins=Math.min(24,Math.max(6,Math.round(hi-lo)||6)),st=(hi-lo)/bins||1,cnt=new Array(bins).fill(0);
+  T.forEach(v=>cnt[Math.min(Math.floor((v-lo)/st),bins-1)]++);
+  const acc=css('--accent');
+  mk('dist',{type:'bar',data:{labels:cnt.map((_,i)=>f(lo+i*st)+' – '+f(lo+(i+1)*st)),datasets:[{label:'Počet měření',data:cnt,backgroundColor:acc+'b0',borderRadius:4}]},
+    options:{...opts('',{x:{ticks:{maxRotation:60,autoSkip:true}},y:{beginAtZero:true}}),plugins:{legend:{display:false},tooltip:{callbacks:{title:i=>i[0].label+' °C'}}}}});
+  const step=Math.max(1,Math.floor(d.length/1500));
+  mk('scat',{type:'scatter',data:{datasets:[{label:'Měření',data:d.filter((_,i)=>i%step===0).map(r=>({x:r.T,y:r.H})),backgroundColor:acc+'80',pointRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${f(c.parsed.x)} °C · ${f(c.parsed.y,0)} %`}}},scales:{x:{title:{display:true,text:'Teplota (°C)'}},y:{title:{display:true,text:'Vlhkost (%)'}}}}});
+  updateCompare();updateHeat();
+}
+function rainCurrent(d){
+  const bars=hourly(d);
+  const tot=bars.reduce((a,b)=>a+b.y,0),wetH=bars.filter(b=>b.y>0),peak=wetH.reduce((a,b)=>b.y>a.y?b:a,{y:0,x:0}),lr=[...raw].reverse().find(r=>r.R>0),dry=lr?(raw.at(-1).t-lr.t)/36e5:null;
+  $('rainKpis').innerHTML=kp('Úhrn za období',f(tot)+' mm','')+kp('Max. intenzita',f(peak.y)+' mm/h',peak.x?fd(new Date(peak.x),DT):'')+kp('Hodin s deštěm',wetH.length+' h','z '+bars.length+' h')+kp('Bez deště',dry==null?'–':dry<48?f(dry,0)+' h':f(dry/24,1)+' dní','od posledních srážek');
+  let s=0;const cum=bars.map(b=>({x:b.x,y:+(s+=b.y).toFixed(2)}));
+  const x=timeX();x.offset=true;x.time.tooltipFormat='dd.MM.yyyy HH:00';
+  mk('rain',{data:{datasets:[
+    {type:'bar',label:'Hodinový úhrn',data:bars,backgroundColor:COL.R+'cc',borderRadius:3,yAxisID:'y',order:2,unit:'mm',dec:2},
+    line(`Kumulativně (celkem ${f(s)} mm)`,cum,COL.A,{yAxisID:'y1',tension:0,borderWidth:2.5,order:1,unit:'mm',dec:1,stepped:false})
+  ]},options:opts('mm',{x,y:{beginAtZero:true,title:{display:true,text:'mm za hodinu'}},y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'kumulativně (mm)'}}})});
+}
+
+/* ---------- srovnání ---------- */
+function updateCompare(){
+  const a=store.meteostanice,b=store.sklenik,badge=$('cmpBadge');
+  if(!a||!b){badge.textContent='❌ Data jedné ze stanic se nepodařilo načíst';return;}
+  const r=$('cmpRange').value,fl=x=>r==='all'?x:x.filter(d=>d.t>=Date.now()-r*864e5);
+  const A=fl(a),B=fl(b);
+  if(A.length&&B.length){const df=avg(B.map(d=>d.T))-avg(A.map(d=>d.T));badge.textContent=`Ø rozdíl teploty: ${df>=0?'+':''}${f(df)} °C (skleník − venku)`;}
+  else badge.textContent='V období nejsou data';
+  const mkc=(id,key,unit,sc)=>mk(id,{type:'line',data:{datasets:[line('Meteostanice',ds(A,key),COL.A),line('Skleník',ds(B,key),COL.G)]},options:opts(unit,{x:timeX(),...sc})});
+  mkc('cmpT','T','°C',{});mkc('cmpH','H','%',{y:{min:0,max:100}});
+}
+
+/* ---------- heatmapa ---------- */
+const HNAME={T:'Teplota',H:'Vlhkost',P:'Tlak',R:'Srážky'},HUNIT={T:'°C',H:'%',P:' hPa',R:' mm'};
+const HGRAD={
+  T:'linear-gradient(to right,#1a2a4a,#3c5c8c,#6b9bc4,#a8cde3,#f5dc78,#faa04a,#e8583a,#c83028,#8b0000)',
+  H:'linear-gradient(to right,rgb(200,220,255),rgb(100,150,255),rgb(50,100,200),rgb(25,40,135))',
+  R:'linear-gradient(to right,rgb(200,220,255),rgb(100,150,255),rgb(50,100,200),rgb(25,40,135))',
+  P:'linear-gradient(to right,rgb(240,240,240),rgb(180,180,180),rgb(100,100,100),rgb(50,50,50))'
+};
+function tempColor(t){
+  const st=[[-5,[26,56,83],[91,143,185]],[0,[91,143,185],[136,197,221]],[5,[136,197,221],[184,224,168]],[10,[184,224,168],[245,232,125]],[15,[245,232,125],[250,172,61]],[20,[250,172,61],[248,92,60]],[25,[248,92,60],[229,53,44]],[30,[229,53,44],[200,16,16]]];
+  if(t<-5)return 'rgb(26,56,83)';if(t>=30)return 'rgb(200,16,16)';
+  for(let i=0;i<st.length-1;i++){const [lo,a,b]=st[i];if(t>=lo&&t<lo+5){const r=(t-lo)/5;return `rgb(${a.map((x,j)=>Math.round(x+r*(b[j]-x))).join(',')})`;}}
+  return 'rgb(200,16,16)';
+}
+function heatColor(v,lo,hi,m){
+  if(m==='T')return tempColor(v);
+  const r=(v-lo)/(hi-lo||1);
+  if(m==='P'){const g=Math.round(240-r*190);return `rgb(${g},${g},${g})`;}
+  return `rgb(${Math.round(200-r*175)},${Math.round(220-r*180)},${Math.round(255-r*120)})`;
+}
+function updateHeat(){
+  const m=$('heatMetric').value,y=+$('heatYear').value;if(!y||!raw.length)return;
+  const leap=(y%4==0&&y%100!=0)||y%400==0,days=leap?366:365,y0=new Date(y,0,1,12);
+  const mat=Array.from({length:days},()=>Array.from({length:24},()=>[]));
+  raw.forEach(d=>{
+    if(d.t.getFullYear()!==y)return;
+    const doy=Math.round((new Date(y,d.t.getMonth(),d.t.getDate(),12)-y0)/864e5);
+    if(doy>=0&&doy<days)mat[doy][d.t.getHours()].push(d[m]);
+  });
+  const vals=mat.map(day=>day.map(h=>h.length?(m==='R'?h.reduce((a,b)=>a+b,0):avg(h)):null));
+  const all=vals.flat().filter(v=>v!==null);
+  $('heatDesc').textContent=(m==='R'?'Součet srážek':'Průměrná '+HNAME[m].toLowerCase())+' podle dne v roce a hodiny · kliknutím na den otevřete jeho detail';
+  if(!all.length){$('heatGrid').innerHTML='<p style="color:var(--muted);padding:20px">Nedostatek dat pro zobrazení heatmapy</p>';return;}
+  const lo=mn(all),hi=mx(all),u=HUNIT[m];
+  $('heatMin').textContent=f(lo)+u;$('heatMax').textContent=f(hi)+u;$('heatGrad').style.background=HGRAD[m];
+  const dim=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31];let cum=0;
+  const months=M3.map((n,i)=>{const l=(cum+dim[i]/2)/days*100;cum+=dim[i];return `<div class="hml" style="left:${l}%">${n.charAt(0).toUpperCase()+n.slice(1)}</div>`;}).join('');
+  const ylab=Array.from({length:24},(_,h)=>`<div class="hyl">${h}:00</div>`).join('');
+  const cols=vals.map((day,di)=>{
+    const dt=new Date(y,0,1+di);
+    return `<div class="hcol" data-d="${di}">${day.map((v,h)=>v===null?'<div class="hc" style="background:var(--line)"></div>':`<div class="hc" style="background:${heatColor(v,lo,hi,m)}" title="${dt.getDate()}. ${dt.getMonth()+1}. ${y} ${h}:00 – ${f(v)}${u}"></div>`).join('')}</div>`;
+  }).join('');
+  $('heatGrid').innerHTML=`<div class="hgrid"><div class="hy">${ylab}</div><div><div class="hxl">${months}</div><div class="hdata">${cols}</div></div></div>`;
+}
+function setupHeatControls(){
+  const c=CFG[source],ms=$('heatMetric'),prev=ms.value;
+  const keys=['T','H'].concat(c.p?['P']:[],c.r?['R']:[]);
+  ms.innerHTML=keys.map(k=>`<option value="${k}">${HNAME[k]}</option>`).join('');
+  ms.value=keys.includes(prev)?prev:'T';
+  const ys=$('heatYear'),old=ys.value,years=[...new Set(raw.map(d=>d.t.getFullYear()))].sort((a,b)=>b-a);
+  ys.innerHTML=years.map(v=>`<option>${v}</option>`).join('');
+  ys.value=years.map(String).includes(old)?old:years[0];
+}
+
+/* ---------- záložky Denní / Měsíční / Roční ---------- */
+function rangeChart(id,rows,a,n,x,unit,color,dec){
+  const small=rows.length>45;
+  mk(id,{data:{labels:rows.map(r=>lbl(id[0],r.t)),datasets:[
+    {type:'bar',label:'Rozsah min–max',data:rows.map(r=>[r[n],r[x]]),backgroundColor:color+'55',borderRadius:4,borderSkipped:false,barPercentage:.75,categoryPercentage:.9,order:2},
+    {type:'line',label:'Průměr',data:rows.map(r=>r[a]),borderColor:color,backgroundColor:color,borderWidth:2.5,pointRadius:small?0:3,pointHoverRadius:5,tension:.3,order:1,dec}
+  ]},options:opts(unit,{y:{beginAtZero:false}})});
+}
+function rainChart(id,rows){
+  let s=0;const cum=rows.map(r=>+(s+=r.R).toFixed(2));
+  mk(id,{data:{labels:rows.map(r=>lbl(id[0],r.t)),datasets:[
+    {type:'bar',label:'Úhrn',data:rows.map(r=>+r.R.toFixed(2)),backgroundColor:COL.R+'cc',borderRadius:4,yAxisID:'y',order:2,dec:1},
+    {type:'line',label:`Kumulativně (celkem ${f(s)} mm)`,data:cum,borderColor:COL.A,backgroundColor:COL.A,borderWidth:2.5,pointRadius:0,tension:.2,yAxisID:'y1',order:1,dec:1}
+  ]},options:opts('mm',{y:{beginAtZero:true,title:{display:true,text:'mm'}},y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'kumulativně (mm)'}}})});
+}
+function kpis(p,rows){
+  const c=CFG[source],best=(k,fn)=>rows.reduce((a,b)=>fn(b[k],a[k])?b:a);
+  const warm=best('Tx',(x,y)=>x>y),cold=best('Tn',(x,y)=>x<y),k=(t,v,s)=>`<div class="kpi"><span>${t}</span><b>${v}</b>${s?`<em>${s}</em>`:''}</div>`;
+  let h=k('Průměrná teplota',f(avg(rows.map(r=>r.Ta)))+' °C','')+k('Nejvyšší teplota',f(warm.Tx)+' °C',lblFull(p,warm.t))+k('Nejnižší teplota',f(cold.Tn)+' °C',lblFull(p,cold.t))+k('Průměrná vlhkost',f(avg(rows.map(r=>r.Ha)),0)+' %','');
+  if(c.r){const tot=rows.reduce((s,r)=>s+r.R,0),wet=best('R',(x,y)=>x>y);h+=k('Srážky celkem',f(tot)+' mm','')+k('Nejvíc srážek',f(wet.R)+' mm',lblFull(p,wet.t));}
+  return h;
+}
+function table(p,rows){
+  const c=CFG[source],cl=v=>v>=25?'hot':v<=0?'cold':'';
+  const th=(t,s)=>`<th colspan="${s}">${t}</th>`,sub=['Ø','min','max'].map(x=>`<th>${x}</th>`).join('');
+  let h=`<thead><tr><th rowspan="2" style="top:0;vertical-align:bottom">${{d:'Den',m:'Měsíc',y:'Rok'}[p]}</th>${th('🌡️ Teplota (°C)',3)}${th('💧 Vlhkost (%)',3)}${c.p?th('🧭 Tlak (hPa)',3):''}${c.r?'<th rowspan="2" style="top:0;vertical-align:bottom">🌧️ Srážky (mm)</th>':''}</tr><tr>${sub}${sub}${c.p?sub:''}</tr></thead><tbody>`;
+  h+=[...rows].reverse().map(r=>`<tr><td>${lblFull(p,r.t)}</td><td><b>${f(r.Ta)}</b></td><td class="${cl(r.Tn)}">${f(r.Tn)}</td><td class="${cl(r.Tx)}">${f(r.Tx)}</td><td><b>${f(r.Ha,0)}</b></td><td>${f(r.Hn,0)}</td><td>${f(r.Hx,0)}</td>${c.p?`<td><b>${f(r.Pa,0)}</b></td><td>${f(r.Pn,0)}</td><td>${f(r.Px,0)}</td>`:''}${c.r?`<td>${f(r.R)}</td>`:''}</tr>`).join('');
+  $(p+'Table').innerHTML=h+'</tbody>';
+}
+function updatePeriod(p){
+  const rows=aggregate(inSpan(raw,p),p),c=CFG[source];if(p==='d')dailyRows=rows;
+  if(!rows.length){$(p+'Kpis').innerHTML='<div class="kpi"><span>V zvoleném období nejsou data</span></div>';return;}
+  $(p+'Kpis').innerHTML=kpis(p,rows);
+  rangeChart(p+'T',rows,'Ta','Tn','Tx','°C',COL.T,1);
+  rangeChart(p+'H',rows,'Ha','Hn','Hx','%',COL.H,0);
+  if(c.p)rangeChart(p+'P',rows,'Pa','Pn','Px','hPa',COL.P,0);
+  if(c.r)rainChart(p+'R',rows);
+  table(p,rows);
+}
+
+/* ---------- nové funkce ---------- */
+function hourly(d){const m=new Map();d.forEach(r=>{const t=new Date(r.t);t.setMinutes(0,0,0);m.set(+t,(m.get(+t)||0)+r.R);});return [...m].sort((a,b)=>a[0]-b[0]).map(([x,y])=>({x,y:+y.toFixed(2)}));}
+function comboChart(id,d,rain){
+  const c=CFG[source];
+  const ds_=[line('Teplota',ds(d,'T'),COL.T,{yAxisID:'yT',unit:'°C',dec:1}),line('Rosný bod',ds(d,'D'),'#14b8a6',{yAxisID:'yT',unit:'°C',dec:1,borderDash:[5,4],borderWidth:1.5}),line('Vlhkost',ds(d,'H'),COL.H,{yAxisID:'yH',unit:'%',dec:0})];
+  const sc={x:timeX(),yT:{position:'left',title:{display:true,text:'°C',color:COL.T},ticks:{color:COL.T},grid:{color:'rgba(239,68,68,.08)'}},
+    yH:{position:'right',min:0,max:100,title:{display:true,text:'%',color:COL.H},ticks:{color:COL.H},grid:{drawOnChartArea:false}}};
+  if(c.p){ds_.push(line('Tlak',ds(d,'P'),COL.P,{yAxisID:'yP',unit:'hPa',dec:0}));sc.yP={position:'right',title:{display:true,text:'hPa',color:COL.P},ticks:{color:COL.P},grid:{drawOnChartArea:false},grace:'5%'};}
+  if(rain&&c.r){ds_.push({type:'bar',label:'Srážky (hod.)',data:hourly(d),backgroundColor:COL.R+'aa',yAxisID:'yR',unit:'mm',dec:2,order:3});sc.yR={position:'right',beginAtZero:true,suggestedMax:2,grid:{drawOnChartArea:false},title:{display:true,text:'mm',color:COL.R},ticks:{color:COL.R}};sc.x.offset=true;}
+  const o=opts('',sc);delete o.scales.y;
+  mk(id,{type:'line',data:{datasets:ds_},options:o});
+}
+function diurnal(d){
+  const b=Array.from({length:24},()=>({T:[],H:[]}));
+  d.forEach(r=>{const h=r.t.getHours();b[h].T.push(r.T);b[h].H.push(r.H);});
+  const g=fn=>b.map(x=>x.T.length?fn(x):null);
+  const o=opts('',{yT:{position:'left',title:{display:true,text:'°C'}},yH:{position:'right',min:0,max:100,grid:{drawOnChartArea:false},title:{display:true,text:'%'}}});delete o.scales.y;
+  o.plugins.legend.labels.filter=i=>i.datasetIndex!==1;
+  mk('diur',{type:'line',data:{labels:b.map((_,h)=>h+':00'),datasets:[
+    {label:'Teplota max',data:g(x=>mx(x.T)),borderColor:'transparent',backgroundColor:COL.T+'22',pointRadius:0,fill:'+1',yAxisID:'yT',unit:'°C'},
+    {label:'Teplota min',data:g(x=>mn(x.T)),borderColor:'transparent',pointRadius:0,fill:false,yAxisID:'yT',unit:'°C'},
+    line('Teplota Ø',g(x=>avg(x.T)),COL.T,{yAxisID:'yT',unit:'°C',borderWidth:2.5}),
+    line('Vlhkost Ø',g(x=>avg(x.H)),COL.H,{yAxisID:'yH',unit:'%',dec:0})
+  ]},options:o});
+}
+function skStats(d){
+  let hot=0,cold=0,day=[],night=[];
+  for(let i=1;i<d.length;i++){const dt=Math.min(d[i].t-d[i-1].t,36e5)/36e5;if(d[i].T>=TH.hot)hot+=dt;if(d[i].T<=TH.cold)cold+=dt;}
+  d.forEach(r=>{const h=r.t.getHours();(h>=6&&h<20?day:night).push(r.T);});
+  const dif=day.length&&night.length?avg(day)-avg(night):null;
+  $('skKpis').innerHTML=kp(`Hodin ≥ ${TH.hot} °C`,f(hot)+' h','')+kp(`Hodin ≤ ${TH.cold} °C`,f(cold)+' h','')+kp('Rozdíl den − noc (DIF)',dif==null?'–':(dif>=0?'+':'')+f(dif)+' °C','Ø 6–20 h vs. zbytek dne')+kp('Rosný bod Ø',f(avg(d.map(r=>r.D)))+' °C','za zvolené období');
+}
+function setTh(){TH.frost=+$('thFrost').value;TH.hot=+$('thHot').value;TH.cold=+$('thCold').value;updateAlerts();if(tab==='c')updateCurrent();}
+function updateAlerts(){
+  const cur=raw.at(-1),prev=raw.find(r=>r.t>=cur.t-36e5)||cur,tr=cur.T-prev.T,a=[];
+  if(cur.T<=0)a.push(['','❄️ Mráz: aktuálně '+f(cur.T)+' °C']);
+  else if(cur.T<=TH.frost&&(tr<0||cur.T-cur.D<2))a.push(['warn',`🥶 Riziko mrazu: ${f(cur.T)} °C, ${tr<0?'teplota klesá':'blízko rosného bodu'} (rosný bod ${f(cur.D)} °C)`]);
+  if(source==='sklenik'&&cur.T>=TH.hot)a.push(['warn',`🔥 Ve skleníku je ${f(cur.T)} °C – zvažte větrání`]);
+  $('alerts').innerHTML=a.map(([c,t])=>`<div class="alert ${c}">${t}</div>`).join('');
+}
+function updateRecords(){
+  const c=CFG[source],at=(a,k,fn)=>a.reduce((x,y)=>fn(y[k],x[k])?y:x),D={day:'numeric',month:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'};
+  const hi=at(raw,'T',(a,b)=>a>b),lo=at(raw,'T',(a,b)=>a<b),hh=at(raw,'H',(a,b)=>a>b),hl=at(raw,'H',(a,b)=>a<b);
+  let h=kp('🔥 Nejvyšší teplota',f(hi.T)+' °C',fd(hi.t,D))+kp('🧊 Nejnižší teplota',f(lo.T)+' °C',fd(lo.t,D))+kp('💧 Nejvyšší vlhkost',f(hh.H,0)+' %',fd(hh.t,D))+kp('🏜️ Nejnižší vlhkost',f(hl.H,0)+' %',fd(hl.t,D));
+  if(c.p){
+    const p=raw.filter(r=>r.P>0);
+    if(p.length){const ph=at(p,'P',(a,b)=>a>b),pl=at(p,'P',(a,b)=>a<b);h+=kp('🧭 Nejvyšší tlak',f(ph.P,0)+' hPa',fd(ph.t,D))+kp('🧭 Nejnižší tlak',f(pl.P,0)+' hPa',fd(pl.t,D));}
+    const wet=at(aggregate(raw,'d'),'R',(a,b)=>a>b),pk=hourly(raw).reduce((a,b)=>b.y>a.y?b:a,{y:0,x:0});
+    h+=kp('🌧️ Nejdeštivější den',f(wet.R)+' mm',lblFull('d',wet.t))+kp('⚡ Max. intenzita',f(pk.y)+' mm/h',pk.x?fd(new Date(pk.x),D):'');
+  }
+  $('records').innerHTML=h;
+}
+function showDay(dt){
+  const d0=new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()),d1=new Date(d0.getFullYear(),d0.getMonth(),d0.getDate()+1),d=raw.filter(r=>r.t>=d0&&r.t<d1);
+  if(!d.length)return;
+  if(tab!=='d')switchTab('d');
+  const T=d.map(r=>r.T),c=CFG[source];
+  $('dayTitle').textContent='🔎 Detail dne – '+fd(d0,{weekday:'long',day:'numeric',month:'numeric',year:'numeric'});
+  $('dayDetail').style.display='block';
+  const ti=T.indexOf(mx(T)),tj=T.indexOf(mn(T));
+  $('dayKpis').innerHTML=kp('Nejvyšší teplota',f(mx(T))+' °C',fd(d[ti].t,{hour:'2-digit',minute:'2-digit'}))+kp('Nejnižší teplota',f(mn(T))+' °C',fd(d[tj].t,{hour:'2-digit',minute:'2-digit'}))+kp('Vlhkost Ø',f(avg(d.map(r=>r.H)),0)+' %','')+kp('Rosný bod Ø',f(avg(d.map(r=>r.D)))+' °C','')+(c.r?kp('Srážky',f(d.reduce((a,r)=>a+r.R,0))+' mm',''):'');
+  comboChart('dayD',d,true);
+  $('dayDetail').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function exportCsv(p){
+  const c=CFG[source],iso=r=>r.t.toLocaleString('sv-SE');
+  const cols=p==='c'?[['Datum a čas',iso],['Teplota (°C)',r=>r.T],['Vlhkost (%)',r=>r.H],['Rosný bod (°C)',r=>r.D],...(c.p?[['Tlak (hPa)',r=>r.P]]:[]),['Baterie (V)',r=>r.B],...(c.r?[['Srážky (mm)',r=>r.R],['Baterie srážkoměru (V)',r=>r.RB]]:[])]
+   :[[{d:'Den',m:'Měsíc',y:'Rok'}[p],r=>lblFull(p,r.t)],['Teplota Ø (°C)',r=>r.Ta],['Teplota min',r=>r.Tn],['Teplota max',r=>r.Tx],['Vlhkost Ø (%)',r=>r.Ha],['Vlhkost min',r=>r.Hn],['Vlhkost max',r=>r.Hx],...(c.p?[['Tlak Ø (hPa)',r=>r.Pa],['Tlak min',r=>r.Pn],['Tlak max',r=>r.Px]]:[]),...(c.r?[['Srážky (mm)',r=>r.R]]:[])];
+  const data=p==='c'?inSpan(raw,'c'):aggregate(inSpan(raw,p),p);
+  if(!data.length)return;
+  const num=v=>typeof v==='number'?String(+v.toFixed(3)).replace('.',','):v;
+  const csv='\ufeff'+[cols.map(x=>x[0]).join(';'),...data.map(r=>cols.map(x=>num(x[1](r))).join(';'))].join('\r\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`${source}_${{c:'data',d:'denni',m:'mesicni',y:'rocni'}[p]}_${new Date().toISOString().slice(0,10)}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+/* ---------- řízení ---------- */
+function refresh(p){p==='c'?updateCurrent():updatePeriod(p);}
+function switchTab(t){
+  tab=t;
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('on','cdmy'[i]===t));
+  document.querySelectorAll('.pane').forEach(el=>el.classList.toggle('on',el.id==='pane-'+t));
+  refresh(t);
+}
+function switchSource(s){
+  if(s===source)return;
+  source=s;const c=CFG[s];
+  document.body.classList.toggle('sklenik',s==='sklenik');
+  $('title').textContent=c.title;$('subtitle').textContent=c.sub;
+  $('bm').classList.toggle('on',s==='meteostanice');$('bs').classList.toggle('on',s==='sklenik');
+  Object.values(charts).forEach(ch=>ch&&ch.destroy());charts={};
+  render();
+}
+function render(){
+  raw=store[source]||[];
+  if(!raw.length){$('app').style.display='none';setMsg('❌ '+(errs[source]||'Žádná data'),true);return;}
+  setMsg('');$('app').style.display='block';
+  $('last').textContent=`Poslední měření ${fd(raw.at(-1).t,{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})} · ${raw.length} záznamů · aktualizace každých 15 min`;
+  setupHeatControls();updateStats();updateAlerts();updateRecords();refresh(tab);
+}
+
+buildPanes();
+loadData();
+setInterval(loadData,REFRESH);
+</script>
 </body>
 </html>
